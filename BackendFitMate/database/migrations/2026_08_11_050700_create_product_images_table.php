@@ -11,13 +11,13 @@ return new class extends Migration
      */
     public function up(): void
     {
-        Schema::create('brands', function (Blueprint $table) {
+        Schema::create('product_images', function (Blueprint $table) {
             $table->id();
-            $table->string('name');
-            $table->string('slug')->unique();
-            $table->string('logo')->nullable();
-            $table->text('description')->nullable();
-            $table->boolean('is_active')->default(true);
+            $table->foreignId('product_id')->constrained()->onDelete('cascade');
+            $table->string('path');
+            $table->string('alt_text')->nullable();
+            $table->unsignedSmallInteger('sort_order')->default(0);
+            $table->boolean('is_primary')->default(false);
             $table->timestamps();
         });
     }
@@ -27,6 +27,6 @@ return new class extends Migration
      */
     public function down(): void
     {
-        Schema::dropIfExists('brands');
+        Schema::dropIfExists('product_images');
     }
 };

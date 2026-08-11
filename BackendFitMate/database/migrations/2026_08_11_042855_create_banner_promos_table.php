@@ -13,6 +13,15 @@ return new class extends Migration
     {
         Schema::create('banner_promos', function (Blueprint $table) {
             $table->id();
+            $table->string('title');
+            $table->string('subtitle')->nullable();
+            $table->string('image');
+            $table->string('link_url')->nullable(); // diarahkan ke produk, kategori, atau halaman promo
+            $table->enum('placement', ['home_hero', 'home_middle', 'category', 'promo_page'])->default('home_hero');
+            $table->unsignedSmallInteger('sort_order')->default(0);
+            $table->timestamp('starts_at')->nullable();
+            $table->timestamp('ends_at')->nullable();
+            $table->boolean('is_active')->default(true);
             $table->timestamps();
         });
     }
