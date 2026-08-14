@@ -1,0 +1,1820 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Struktur Database FitMate</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<header class="hero">
+    <div class="wrap">
+        <p class="kicker">Dokumentasi Skema</p>
+        <h1>Struktur Database <span>FitMate</span></h1>
+        <p class="lead">
+            Gambaran seluruh tabel yang dibuat oleh migration di <code>database/migrations</code>.
+            Marketplace fashion multi-toko dengan sistem rekomendasi ukuran terstandar.
+        </p>
+        <div class="stats">
+            <div class="stat"><b>35</b><span>Tabel</span></div>
+            <div class="stat"><b>30</b><span>File Migration</span></div>
+            <div class="stat"><b>5</b><span>Kelompok Domain</span></div>
+        </div>
+    </div>
+</header>
+
+<nav class="nav">
+    <div class="wrap navrow">
+        <a href="#alur">Alur Sistem</a>
+        <a href="#peta">Peta Relasi</a>
+        <a href="#g1">Pengguna</a>
+        <a href="#g2">Sistem Ukuran</a>
+        <a href="#g3">Katalog</a>
+        <a href="#g4">Transaksi</a>
+        <a href="#g5">Sistem Laravel</a>
+        <a href="#detail" class="hi">Tabel Detail</a>
+    </div>
+</nav>
+
+<main class="wrap">
+
+    <!-- ============ LEGENDA ============ -->
+    <section class="legend">
+        <h2 class="mini">Legenda Penanda Kolom</h2>
+        <div class="legend-row">
+            <span><i class="b pk">PK</i> Primary Key</span>
+            <span><i class="b fk">FK</i> Foreign Key</span>
+            <span><i class="b uq">UQ</i> Unique</span>
+            <span><i class="b ix">IDX</i> Index</span>
+            <span><i class="b nl">NULL</i> Boleh kosong</span>
+            <span><i class="b sd">SOFT</i> Soft delete</span>
+        </div>
+        <p class="note">
+            <b>Aksi saat induk dihapus:</b>
+            <i class="b cas">cascade</i> ikut terhapus &middot;
+            <i class="b res">restrict</i> tidak boleh dihapus &middot;
+            <i class="b snl">set null</i> kolom dikosongkan.
+        </p>
+    </section>
+
+    <!-- ============ ALUR SISTEM ============ -->
+    <section id="alur">
+        <h2>Alur Utama Sistem</h2>
+        <div class="flow-grid">
+
+            <article class="flow">
+                <h3><span class="num">1</span> Standarisasi Ukuran</h3>
+                <div class="chain">
+                    <span class="chip core">body_measurements</span><em>&rarr;</em>
+                    <span class="chip core">size_charts</span><em>&rarr;</em>
+                    <span class="chip core">size_chart_entries</span><em>&rarr;</em>
+                    <span class="chip core">size_chart_entry_measurements</span>
+                </div>
+                <p>
+                    Admin mendefinisikan dimensi ukur (lingkar dada, panjang kaki, dst), lalu membuat
+                    standar resmi FitMate. Di tabel terakhir dijawab pertanyaan <b>"XL itu berapa?"</b> &mdash;
+                    misal XL = lingkar dada 104&ndash;108 cm. Toko tidak boleh membuat definisi sendiri.
+                </p>
+            </article>
+
+            <article class="flow">
+                <h3><span class="num">2</span> Profil Badan Pengguna</h3>
+                <div class="chain">
+                    <span class="chip user">users</span><em>&rarr;</em>
+                    <span class="chip user">user_body_profiles</span><em>&rarr;</em>
+                    <span class="chip user">user_body_measurements</span>
+                </div>
+                <p>
+                    Satu user bisa punya beberapa profil badan (diri sendiri, pasangan, adik).
+                    Angka ukurannya diisi sekali, lalu berlaku di semua toko.
+                </p>
+            </article>
+
+            <article class="flow">
+                <h3><span class="num">3</span> Rekomendasi Ukuran</h3>
+                <div class="chain">
+                    <span class="chip user">user_body_measurements</span><em>+</em>
+                    <span class="chip core">size_chart_entry_measurements</span><em>&rarr;</em>
+                    <span class="chip core">size_recommendations</span>
+                </div>
+                <p>
+                    Ukuran badan user dibandingkan dengan rentang tiap label ukuran. Label dengan
+                    kecocokan terbanyak jadi rekomendasi, lengkap dengan <code>fit_score</code> dan
+                    status <code>tight / fit / loose</code>. Hasilnya disimpan sebagai cache.
+                </p>
+            </article>
+
+            <article class="flow">
+                <h3><span class="num">4</span> Katalog Produk</h3>
+                <div class="chain">
+                    <span class="chip cat">stores</span><em>&rarr;</em>
+                    <span class="chip cat">products</span><em>&rarr;</em>
+                    <span class="chip cat">product_variants</span><em>&rarr;</em>
+                    <span class="chip core">product_measurements</span>
+                </div>
+                <p>
+                    Produk milik toko, varian menyimpan kombinasi ukuran + warna beserta stoknya.
+                    Ukuran varian menunjuk ke <code>size_chart_entries</code>, bukan teks bebas.
+                    Ukuran fisik barang diisi seller untuk diverifikasi admin.
+                </p>
+            </article>
+
+            <article class="flow">
+                <h3><span class="num">5</span> Checkout Multi-Toko</h3>
+                <div class="chain">
+                    <span class="chip trx">carts</span><em>&rarr;</em>
+                    <span class="chip trx">orders</span><em>&rarr;</em>
+                    <span class="chip trx">store_orders</span><em>&rarr;</em>
+                    <span class="chip trx">order_items</span>
+                </div>
+                <p>
+                    Keranjang boleh berisi barang dari banyak toko. Saat checkout: <b>satu order</b>
+                    (satu kali bayar) dipecah menjadi <b>beberapa store_order</b> yang statusnya jalan
+                    sendiri-sendiri, karena tiap toko mengirim terpisah.
+                </p>
+            </article>
+
+            <article class="flow">
+                <h3><span class="num">6</span> Umpan Balik &amp; Koreksi</h3>
+                <div class="chain">
+                    <span class="chip trx">order_items</span><em>&rarr;</em>
+                    <span class="chip trx">product_reviews</span><em>&rarr;</em>
+                    <span class="chip core">size_charts</span>
+                </div>
+                <p>
+                    Review menyimpan <code>fit_feedback</code> (kekecilan / pas / kebesaran).
+                    Kalau banyak yang mengeluh ukuran tertentu meleset, admin punya bukti untuk
+                    menyetel ulang rentang standarnya.
+                </p>
+            </article>
+
+        </div>
+    </section>
+
+    <!-- ============ PETA RELASI ============ -->
+    <section id="peta">
+        <h2>Peta Relasi Antar Tabel</h2>
+        <p class="sub">Indentasi menunjukkan arah relasi: tabel di bawah memiliki foreign key ke tabel di atasnya.</p>
+
+        <div class="tree-grid">
+
+            <div class="tree">
+                <h3 class="t-user">users</h3>
+                <ul>
+                    <li>user_addresses</li>
+                    <li>user_body_profiles
+                        <ul>
+                            <li>user_body_measurements</li>
+                            <li>size_recommendations</li>
+                        </ul>
+                    </li>
+                    <li>carts
+                        <ul><li>cart_items</li></ul>
+                    </li>
+                    <li>wishlists</li>
+                    <li>stores <span class="tag">role: seller</span></li>
+                    <li>orders</li>
+                    <li>product_reviews</li>
+                    <li>coupon_usages</li>
+                    <li>sessions <span class="tag">tanpa FK</span></li>
+                </ul>
+            </div>
+
+            <div class="tree">
+                <h3 class="t-core">body_measurements</h3>
+                <ul>
+                    <li>user_body_measurements</li>
+                    <li>size_chart_entry_measurements</li>
+                    <li>product_measurements</li>
+                </ul>
+                <h3 class="t-core mt">size_charts</h3>
+                <ul>
+                    <li>size_chart_entries
+                        <ul>
+                            <li>size_chart_entry_measurements</li>
+                            <li>product_variants</li>
+                            <li>size_recommendations</li>
+                        </ul>
+                    </li>
+                    <li>products</li>
+                    <li>size_recommendations</li>
+                </ul>
+            </div>
+
+            <div class="tree">
+                <h3 class="t-cat">stores</h3>
+                <ul>
+                    <li>products
+                        <ul>
+                            <li>product_variants
+                                <ul>
+                                    <li>product_measurements</li>
+                                    <li>cart_items</li>
+                                    <li>order_items</li>
+                                </ul>
+                            </li>
+                            <li>product_images</li>
+                            <li>product_reviews</li>
+                            <li>wishlists</li>
+                            <li>size_recommendations</li>
+                        </ul>
+                    </li>
+                    <li>coupons <span class="tag">boleh null = milik FitMate</span></li>
+                    <li>store_orders</li>
+                </ul>
+                <h3 class="t-cat mt">categories</h3>
+                <ul>
+                    <li>categories <span class="tag">self / sub-kategori</span></li>
+                    <li>products</li>
+                </ul>
+                <h3 class="t-cat mt">brands</h3>
+                <ul><li>products</li></ul>
+            </div>
+
+            <div class="tree">
+                <h3 class="t-trx">orders</h3>
+                <ul>
+                    <li>store_orders
+                        <ul>
+                            <li>order_items
+                                <ul><li>product_reviews</li></ul>
+                            </li>
+                            <li>shipments</li>
+                        </ul>
+                    </li>
+                    <li>payments</li>
+                    <li>coupon_usages</li>
+                </ul>
+                <h3 class="t-trx mt">coupons</h3>
+                <ul>
+                    <li>orders</li>
+                    <li>coupon_usages</li>
+                </ul>
+                <h3 class="t-idle mt">banner_promos</h3>
+                <ul><li class="none">berdiri sendiri, tanpa relasi</li></ul>
+            </div>
+
+        </div>
+    </section>
+
+    <!-- ============ GRUP 1: PENGGUNA ============ -->
+    <section id="g1">
+        <h2><span class="dot user"></span> Pengguna &amp; Autentikasi</h2>
+        <p class="sub">Identitas, alamat pengiriman, dan profil badan milik pengguna.</p>
+        <div class="cards">
+
+            <article class="card user">
+                <header>
+                    <h3>users</h3>
+                    <p>Akun semua peran: pembeli, seller, CS, admin, superadmin.</p>
+                </header>
+                <table>
+                    <tr><td>id</td><td class="ty">bigint</td><td><i class="b pk">PK</i></td></tr>
+                    <tr><td>name</td><td class="ty">string</td><td></td></tr>
+                    <tr><td>email</td><td class="ty">string</td><td><i class="b uq">UQ</i></td></tr>
+                    <tr><td>phone_number</td><td class="ty">string</td><td><i class="b nl">NULL</i></td></tr>
+                    <tr><td>profile_picture</td><td class="ty">string</td><td><i class="b nl">NULL</i></td></tr>
+                    <tr><td>gender</td><td class="ty">enum</td><td><span class="en">male, female</span></td></tr>
+                    <tr><td>role</td><td class="ty">enum</td><td><span class="en">user, seller, customerservice, admin, superadmin</span></td></tr>
+                    <tr><td>status</td><td class="ty">enum</td><td><span class="en">active, inactive</span></td></tr>
+                    <tr><td>email_verified_at</td><td class="ty">timestamp</td><td><i class="b nl">NULL</i></td></tr>
+                    <tr><td>password</td><td class="ty">string</td><td></td></tr>
+                    <tr><td>remember_token</td><td class="ty">string</td><td><i class="b nl">NULL</i></td></tr>
+                    <tr><td>created_at / updated_at</td><td class="ty">timestamp</td><td></td></tr>
+                </table>
+            </article>
+
+            <article class="card user">
+                <header>
+                    <h3>user_addresses</h3>
+                    <p>Daftar alamat pengiriman. Satu bisa ditandai sebagai default.</p>
+                </header>
+                <table>
+                    <tr><td>id</td><td class="ty">bigint</td><td><i class="b pk">PK</i></td></tr>
+                    <tr><td>user_id</td><td class="ty">bigint</td><td><i class="b fk">FK</i> users <i class="b cas">cascade</i></td></tr>
+                    <tr><td>label</td><td class="ty">string</td><td><span class="en">Home / Work / Other</span></td></tr>
+                    <tr><td>recipient_name</td><td class="ty">string</td><td>nama penerima</td></tr>
+                    <tr><td>recipient_phone</td><td class="ty">string</td><td>telepon penerima</td></tr>
+                    <tr><td>street</td><td class="ty">text</td><td></td></tr>
+                    <tr><td>city</td><td class="ty">string</td><td></td></tr>
+                    <tr><td>state</td><td class="ty">string</td><td>provinsi</td></tr>
+                    <tr><td>postal_code</td><td class="ty">string</td><td></td></tr>
+                    <tr><td>country</td><td class="ty">string</td><td></td></tr>
+                    <tr><td>is_default</td><td class="ty">boolean</td><td>default <code>false</code></td></tr>
+                    <tr><td>created_at / updated_at</td><td class="ty">timestamp</td><td></td></tr>
+                </table>
+            </article>
+
+            <article class="card user">
+                <header>
+                    <h3>user_body_profiles</h3>
+                    <p>Identitas profil badan. Angka ukurannya ada di tabel terpisah.</p>
+                </header>
+                <table>
+                    <tr><td>id</td><td class="ty">bigint</td><td><i class="b pk">PK</i></td></tr>
+                    <tr><td>user_id</td><td class="ty">bigint</td><td><i class="b fk">FK</i> users <i class="b cas">cascade</i></td></tr>
+                    <tr><td>profile_name</td><td class="ty">string</td><td><span class="en">"Profil Saya", "Adik"</span></td></tr>
+                    <tr><td>gender</td><td class="ty">enum</td><td>penentu chart yang dipakai</td></tr>
+                    <tr><td>is_default</td><td class="ty">boolean</td><td>profil utama</td></tr>
+                    <tr><td>created_at / updated_at</td><td class="ty">timestamp</td><td></td></tr>
+                </table>
+            </article>
+
+            <article class="card user sys">
+                <header>
+                    <h3>password_reset_tokens</h3>
+                    <p>Token lupa password bawaan Laravel.</p>
+                </header>
+                <table>
+                    <tr><td>email</td><td class="ty">string</td><td><i class="b pk">PK</i></td></tr>
+                    <tr><td>token</td><td class="ty">string</td><td></td></tr>
+                    <tr><td>created_at</td><td class="ty">timestamp</td><td><i class="b nl">NULL</i></td></tr>
+                </table>
+            </article>
+
+            <article class="card user sys">
+                <header>
+                    <h3>sessions</h3>
+                    <p>Sesi login. <code>user_id</code> hanya di-index, tanpa foreign key.</p>
+                </header>
+                <table>
+                    <tr><td>id</td><td class="ty">string</td><td><i class="b pk">PK</i></td></tr>
+                    <tr><td>user_id</td><td class="ty">bigint</td><td><i class="b ix">IDX</i> <i class="b nl">NULL</i></td></tr>
+                    <tr><td>ip_address</td><td class="ty">string(45)</td><td><i class="b nl">NULL</i></td></tr>
+                    <tr><td>user_agent</td><td class="ty">text</td><td><i class="b nl">NULL</i></td></tr>
+                    <tr><td>payload</td><td class="ty">longtext</td><td></td></tr>
+                    <tr><td>last_activity</td><td class="ty">integer</td><td><i class="b ix">IDX</i></td></tr>
+                </table>
+            </article>
+
+        </div>
+    </section>
+
+    <!-- ============ GRUP 2: SISTEM UKURAN ============ -->
+    <section id="g2">
+        <h2><span class="dot core"></span> Sistem Ukuran <span class="badge-main">Inti FitMate</span></h2>
+        <p class="sub">Bagian yang membedakan FitMate dari e-commerce biasa: satu standar ukuran untuk semua toko.</p>
+        <div class="cards">
+
+            <article class="card core">
+                <header>
+                    <h3>body_measurements</h3>
+                    <p>Kamus dimensi ukur &mdash; sumber kebenaran tunggal yang dipakai bersama oleh ukuran badan user, standar FitMate, dan ukuran produk. Admin menambah dimensi lewat data, tanpa migration baru.</p>
+                </header>
+                <table>
+                    <tr><td>id</td><td class="ty">bigint</td><td><i class="b pk">PK</i></td></tr>
+                    <tr><td>key</td><td class="ty">string</td><td><i class="b uq">UQ</i> <span class="en">lingkar_dada</span></td></tr>
+                    <tr><td>label</td><td class="ty">string</td><td><span class="en">Lingkar Dada</span></td></tr>
+                    <tr><td>description</td><td class="ty">string</td><td>panduan cara mengukur</td></tr>
+                    <tr><td>unit</td><td class="ty">string(10)</td><td>default <code>cm</code></td></tr>
+                    <tr><td>applies_to</td><td class="ty">enum</td><td><span class="en">general, top, bottom, footwear</span></td></tr>
+                    <tr><td>sort_order</td><td class="ty">smallint</td><td></td></tr>
+                    <tr><td>is_active</td><td class="ty">boolean</td><td></td></tr>
+                    <tr><td>created_at / updated_at</td><td class="ty">timestamp</td><td></td></tr>
+                </table>
+            </article>
+
+            <article class="card core">
+                <header>
+                    <h3>user_body_measurements</h3>
+                    <p>Angka ukuran badan user, satu baris per dimensi.</p>
+                </header>
+                <table>
+                    <tr><td>id</td><td class="ty">bigint</td><td><i class="b pk">PK</i></td></tr>
+                    <tr><td>user_body_profile_id</td><td class="ty">bigint</td><td><i class="b fk">FK</i> <i class="b cas">cascade</i></td></tr>
+                    <tr><td>body_measurement_id</td><td class="ty">bigint</td><td><i class="b fk">FK</i> <i class="b cas">cascade</i></td></tr>
+                    <tr><td>value</td><td class="ty">decimal(6,2)</td><td></td></tr>
+                    <tr><td>created_at / updated_at</td><td class="ty">timestamp</td><td></td></tr>
+                </table>
+                <footer><i class="b uq">UQ</i> profil + dimensi &mdash; satu dimensi hanya sekali per profil</footer>
+            </article>
+
+            <article class="card core">
+                <header>
+                    <h3>size_charts</h3>
+                    <p>Standar ukuran resmi FitMate. Hanya admin yang boleh mengubah, sehingga 'XL' bernilai sama di seluruh toko.</p>
+                </header>
+                <table>
+                    <tr><td>id</td><td class="ty">bigint</td><td><i class="b pk">PK</i></td></tr>
+                    <tr><td>name</td><td class="ty">string</td><td><span class="en">"Atasan Pria"</span></td></tr>
+                    <tr><td>slug</td><td class="ty">string</td><td><i class="b uq">UQ</i></td></tr>
+                    <tr><td>size_type</td><td class="ty">enum</td><td><span class="en">top, bottom, footwear</span></td></tr>
+                    <tr><td>gender</td><td class="ty">enum</td><td><span class="en">male, female, unisex</span></td></tr>
+                    <tr><td>description</td><td class="ty">text</td><td><i class="b nl">NULL</i></td></tr>
+                    <tr><td>is_active</td><td class="ty">boolean</td><td></td></tr>
+                    <tr><td>created_at / updated_at</td><td class="ty">timestamp</td><td></td></tr>
+                </table>
+                <footer><i class="b uq">UQ</i> size_type + gender &mdash; satu standar per kombinasi</footer>
+            </article>
+
+            <article class="card core">
+                <header>
+                    <h3>size_chart_entries</h3>
+                    <p>Baris label di dalam chart: S, M, L, XL, atau 40, 41, 42 untuk alas kaki.</p>
+                </header>
+                <table>
+                    <tr><td>id</td><td class="ty">bigint</td><td><i class="b pk">PK</i></td></tr>
+                    <tr><td>size_chart_id</td><td class="ty">bigint</td><td><i class="b fk">FK</i> <i class="b cas">cascade</i></td></tr>
+                    <tr><td>label</td><td class="ty">string(20)</td><td><span class="en">XL</span></td></tr>
+                    <tr><td>sort_order</td><td class="ty">smallint</td><td>agar XS &lt; S &lt; M &lt; L urut</td></tr>
+                    <tr><td>is_active</td><td class="ty">boolean</td><td></td></tr>
+                    <tr><td>created_at / updated_at</td><td class="ty">timestamp</td><td></td></tr>
+                </table>
+                <footer><i class="b uq">UQ</i> size_chart_id + label</footer>
+            </article>
+
+            <article class="card core highlight">
+                <header>
+                    <h3>size_chart_entry_measurements</h3>
+                    <p>Inti standarisasi: jawaban dari <b>"XL itu berapa?"</b>. Contoh: entry XL + lingkar_dada &rarr; min 104,00 max 108,00.</p>
+                </header>
+                <table>
+                    <tr><td>id</td><td class="ty">bigint</td><td><i class="b pk">PK</i></td></tr>
+                    <tr><td>size_chart_entry_id</td><td class="ty">bigint</td><td><i class="b fk">FK</i> <i class="b cas">cascade</i></td></tr>
+                    <tr><td>body_measurement_id</td><td class="ty">bigint</td><td><i class="b fk">FK</i> <i class="b cas">cascade</i></td></tr>
+                    <tr><td>min_value</td><td class="ty">decimal(6,2)</td><td>batas bawah</td></tr>
+                    <tr><td>max_value</td><td class="ty">decimal(6,2)</td><td>batas atas</td></tr>
+                    <tr><td>created_at / updated_at</td><td class="ty">timestamp</td><td></td></tr>
+                </table>
+                <footer><i class="b uq">UQ</i> entry + dimensi</footer>
+            </article>
+
+            <article class="card core">
+                <header>
+                    <h3>product_measurements</h3>
+                    <p>Ukuran fisik barang jadi (bukan ukuran badan) per varian, diisi seller. Dipakai admin untuk verifikasi dan ditampilkan di halaman produk.</p>
+                </header>
+                <table>
+                    <tr><td>id</td><td class="ty">bigint</td><td><i class="b pk">PK</i></td></tr>
+                    <tr><td>product_variant_id</td><td class="ty">bigint</td><td><i class="b fk">FK</i> <i class="b cas">cascade</i></td></tr>
+                    <tr><td>body_measurement_id</td><td class="ty">bigint</td><td><i class="b fk">FK</i> <i class="b cas">cascade</i></td></tr>
+                    <tr><td>value</td><td class="ty">decimal(6,2)</td><td></td></tr>
+                    <tr><td>created_at / updated_at</td><td class="ty">timestamp</td><td></td></tr>
+                </table>
+                <footer><i class="b uq">UQ</i> varian + dimensi</footer>
+            </article>
+
+            <article class="card core">
+                <header>
+                    <h3>size_recommendations</h3>
+                    <p>Cache hasil perhitungan ukuran, sekaligus data analitik. Tidak dihitung ulang tiap kali produk dibuka.</p>
+                </header>
+                <table>
+                    <tr><td>id</td><td class="ty">bigint</td><td><i class="b pk">PK</i></td></tr>
+                    <tr><td>user_body_profile_id</td><td class="ty">bigint</td><td><i class="b fk">FK</i> <i class="b cas">cascade</i></td></tr>
+                    <tr><td>size_chart_id</td><td class="ty">bigint</td><td><i class="b fk">FK</i> <i class="b cas">cascade</i></td></tr>
+                    <tr><td>size_chart_entry_id</td><td class="ty">bigint</td><td><i class="b fk">FK</i> <i class="b nl">NULL</i> <i class="b snl">set null</i> &mdash; hasilnya</td></tr>
+                    <tr><td>product_id</td><td class="ty">bigint</td><td><i class="b fk">FK</i> <i class="b nl">NULL</i> &mdash; null = umum per chart</td></tr>
+                    <tr><td>fit_status</td><td class="ty">enum</td><td><span class="en">tight, fit, loose</span></td></tr>
+                    <tr><td>fit_score</td><td class="ty">decimal(5,2)</td><td>0&ndash;100, tingkat keyakinan</td></tr>
+                    <tr><td>matched_measurements</td><td class="ty">tinyint</td><td>dimensi yang masuk rentang</td></tr>
+                    <tr><td>total_measurements</td><td class="ty">tinyint</td><td>dimensi yang dibandingkan</td></tr>
+                    <tr><td>computed_at</td><td class="ty">timestamp</td><td><i class="b nl">NULL</i></td></tr>
+                    <tr><td>created_at / updated_at</td><td class="ty">timestamp</td><td></td></tr>
+                </table>
+                <footer><i class="b uq">UQ</i> profil + chart + produk</footer>
+            </article>
+
+        </div>
+    </section>
+
+    <!-- ============ GRUP 3: KATALOG ============ -->
+    <section id="g3">
+        <h2><span class="dot cat"></span> Toko &amp; Katalog Produk</h2>
+        <p class="sub">Toko seller pihak ketiga beserta produk, varian, dan gambarnya.</p>
+        <div class="cards">
+
+            <article class="card cat">
+                <header>
+                    <h3>stores</h3>
+                    <p>Toko milik seller. Satu user role <code>seller</code> punya satu toko.</p>
+                </header>
+                <table>
+                    <tr><td>id</td><td class="ty">bigint</td><td><i class="b pk">PK</i></td></tr>
+                    <tr><td>user_id</td><td class="ty">bigint</td><td><i class="b fk">FK</i> users <i class="b cas">cascade</i> &mdash; pemilik</td></tr>
+                    <tr><td>name</td><td class="ty">string</td><td></td></tr>
+                    <tr><td>slug</td><td class="ty">string</td><td><i class="b uq">UQ</i></td></tr>
+                    <tr><td>description</td><td class="ty">text</td><td><i class="b nl">NULL</i></td></tr>
+                    <tr><td>logo / banner</td><td class="ty">string</td><td><i class="b nl">NULL</i></td></tr>
+                    <tr><td>phone_number / email</td><td class="ty">string</td><td><i class="b nl">NULL</i></td></tr>
+                    <tr><td>street, city, state, postal_code</td><td class="ty">text/string</td><td>alamat asal pengiriman</td></tr>
+                    <tr><td>status</td><td class="ty">enum</td><td><span class="en">pending, active, suspended, rejected</span></td></tr>
+                    <tr><td>verified_at</td><td class="ty">timestamp</td><td>diverifikasi admin</td></tr>
+                    <tr><td>rating_average</td><td class="ty">decimal(3,2)</td><td>cache rating</td></tr>
+                    <tr><td>rating_count</td><td class="ty">integer</td><td></td></tr>
+                    <tr><td>created_at / updated_at</td><td class="ty">timestamp</td><td></td></tr>
+                    <tr><td>deleted_at</td><td class="ty">timestamp</td><td><i class="b sd">SOFT</i></td></tr>
+                </table>
+            </article>
+
+            <article class="card cat">
+                <header>
+                    <h3>categories</h3>
+                    <p>Kategori bertingkat (Pakaian &gt; Kaos). <code>size_type</code> menentukan produk di kategori ini ikut standar ukuran yang mana.</p>
+                </header>
+                <table>
+                    <tr><td>id</td><td class="ty">bigint</td><td><i class="b pk">PK</i></td></tr>
+                    <tr><td>parent_id</td><td class="ty">bigint</td><td><i class="b fk">FK</i> categories <i class="b nl">NULL</i> <i class="b cas">cascade</i></td></tr>
+                    <tr><td>name</td><td class="ty">string</td><td></td></tr>
+                    <tr><td>slug</td><td class="ty">string</td><td><i class="b uq">UQ</i></td></tr>
+                    <tr><td>type</td><td class="ty">enum</td><td><span class="en">clothing, footwear, accessories</span></td></tr>
+                    <tr><td>size_type</td><td class="ty">enum</td><td><span class="en">top, bottom, footwear, none</span> &mdash; <code>none</code> untuk aksesori</td></tr>
+                    <tr><td>description / icon</td><td class="ty">string</td><td><i class="b nl">NULL</i></td></tr>
+                    <tr><td>sort_order</td><td class="ty">smallint</td><td></td></tr>
+                    <tr><td>is_active</td><td class="ty">boolean</td><td></td></tr>
+                    <tr><td>created_at / updated_at</td><td class="ty">timestamp</td><td></td></tr>
+                </table>
+            </article>
+
+            <article class="card cat">
+                <header>
+                    <h3>brands</h3>
+                    <p>Merek produk, dipakai untuk filter katalog.</p>
+                </header>
+                <table>
+                    <tr><td>id</td><td class="ty">bigint</td><td><i class="b pk">PK</i></td></tr>
+                    <tr><td>name</td><td class="ty">string</td><td></td></tr>
+                    <tr><td>slug</td><td class="ty">string</td><td><i class="b uq">UQ</i></td></tr>
+                    <tr><td>logo</td><td class="ty">string</td><td><i class="b nl">NULL</i></td></tr>
+                    <tr><td>description</td><td class="ty">text</td><td><i class="b nl">NULL</i></td></tr>
+                    <tr><td>is_active</td><td class="ty">boolean</td><td></td></tr>
+                    <tr><td>created_at / updated_at</td><td class="ty">timestamp</td><td></td></tr>
+                </table>
+            </article>
+
+            <article class="card cat highlight">
+                <header>
+                    <h3>products</h3>
+                    <p>Produk milik toko. Menunjuk ke satu size chart yang wajib diikuti seluruh variannya.</p>
+                </header>
+                <table>
+                    <tr><td>id</td><td class="ty">bigint</td><td><i class="b pk">PK</i></td></tr>
+                    <tr><td>store_id</td><td class="ty">bigint</td><td><i class="b fk">FK</i> <i class="b cas">cascade</i></td></tr>
+                    <tr><td>category_id</td><td class="ty">bigint</td><td><i class="b fk">FK</i> <i class="b res">restrict</i></td></tr>
+                    <tr><td>brand_id</td><td class="ty">bigint</td><td><i class="b fk">FK</i> <i class="b nl">NULL</i> <i class="b snl">set null</i></td></tr>
+                    <tr><td>size_chart_id</td><td class="ty">bigint</td><td><i class="b fk">FK</i> <i class="b nl">NULL</i> &mdash; null untuk aksesori</td></tr>
+                    <tr><td>name</td><td class="ty">string</td><td></td></tr>
+                    <tr><td>slug</td><td class="ty">string</td><td><i class="b uq">UQ</i></td></tr>
+                    <tr><td>description</td><td class="ty">text</td><td><i class="b nl">NULL</i></td></tr>
+                    <tr><td>target_gender</td><td class="ty">enum</td><td><span class="en">male, female, unisex</span></td></tr>
+                    <tr><td>base_price</td><td class="ty">decimal(12,2)</td><td>harga tampilan</td></tr>
+                    <tr><td>weight_gram</td><td class="ty">integer</td><td></td></tr>
+                    <tr><td>status</td><td class="ty">enum</td><td><span class="en">draft, pending_review, active, inactive, rejected</span></td></tr>
+                    <tr><td>rating_average / rating_count</td><td class="ty">decimal / int</td><td>cache</td></tr>
+                    <tr><td>sold_count / view_count</td><td class="ty">integer</td><td></td></tr>
+                    <tr><td>is_featured</td><td class="ty">boolean</td><td></td></tr>
+                    <tr><td>published_at</td><td class="ty">timestamp</td><td><i class="b nl">NULL</i></td></tr>
+                    <tr><td>created_at / updated_at</td><td class="ty">timestamp</td><td></td></tr>
+                    <tr><td>deleted_at</td><td class="ty">timestamp</td><td><i class="b sd">SOFT</i> &mdash; jaga riwayat order</td></tr>
+                </table>
+                <footer><i class="b ix">IDX</i> status + category_id</footer>
+            </article>
+
+            <article class="card cat">
+                <header>
+                    <h3>product_variants</h3>
+                    <p>Kombinasi ukuran + warna yang benar-benar dijual dan punya stok. Ukurannya menunjuk entry standar, bukan teks bebas.</p>
+                </header>
+                <table>
+                    <tr><td>id</td><td class="ty">bigint</td><td><i class="b pk">PK</i></td></tr>
+                    <tr><td>product_id</td><td class="ty">bigint</td><td><i class="b fk">FK</i> <i class="b cas">cascade</i></td></tr>
+                    <tr><td>size_chart_entry_id</td><td class="ty">bigint</td><td><i class="b fk">FK</i> <i class="b nl">NULL</i> <i class="b snl">set null</i></td></tr>
+                    <tr><td>sku</td><td class="ty">string</td><td><i class="b uq">UQ</i></td></tr>
+                    <tr><td>color_name</td><td class="ty">string</td><td><i class="b nl">NULL</i></td></tr>
+                    <tr><td>color_hex</td><td class="ty">string(7)</td><td><span class="en">#1A2B3C</span></td></tr>
+                    <tr><td>price</td><td class="ty">decimal(12,2)</td><td>harga asli per varian</td></tr>
+                    <tr><td>compare_at_price</td><td class="ty">decimal(12,2)</td><td>harga coret</td></tr>
+                    <tr><td>stock</td><td class="ty">integer</td><td></td></tr>
+                    <tr><td>weight_gram</td><td class="ty">integer</td><td>null = ikut berat produk</td></tr>
+                    <tr><td>image</td><td class="ty">string</td><td><i class="b nl">NULL</i></td></tr>
+                    <tr><td>is_active</td><td class="ty">boolean</td><td></td></tr>
+                    <tr><td>created_at / updated_at</td><td class="ty">timestamp</td><td></td></tr>
+                </table>
+                <footer><i class="b uq">UQ</i> produk + entry ukuran + warna</footer>
+            </article>
+
+            <article class="card cat">
+                <header>
+                    <h3>product_images</h3>
+                    <p>Galeri gambar produk, satu ditandai sebagai gambar utama.</p>
+                </header>
+                <table>
+                    <tr><td>id</td><td class="ty">bigint</td><td><i class="b pk">PK</i></td></tr>
+                    <tr><td>product_id</td><td class="ty">bigint</td><td><i class="b fk">FK</i> <i class="b cas">cascade</i></td></tr>
+                    <tr><td>path</td><td class="ty">string</td><td></td></tr>
+                    <tr><td>alt_text</td><td class="ty">string</td><td><i class="b nl">NULL</i></td></tr>
+                    <tr><td>sort_order</td><td class="ty">smallint</td><td></td></tr>
+                    <tr><td>is_primary</td><td class="ty">boolean</td><td></td></tr>
+                    <tr><td>created_at / updated_at</td><td class="ty">timestamp</td><td></td></tr>
+                </table>
+            </article>
+
+        </div>
+    </section>
+
+    <!-- ============ GRUP 4: TRANSAKSI ============ -->
+    <section id="g4">
+        <h2><span class="dot trx"></span> Transaksi, Promo &amp; Ulasan</h2>
+        <p class="sub">Dari keranjang sampai pengiriman, termasuk kupon dan review.</p>
+        <div class="cards">
+
+            <article class="card trx">
+                <header>
+                    <h3>carts</h3>
+                    <p>Satu user tepat satu keranjang.</p>
+                </header>
+                <table>
+                    <tr><td>id</td><td class="ty">bigint</td><td><i class="b pk">PK</i></td></tr>
+                    <tr><td>user_id</td><td class="ty">bigint</td><td><i class="b fk">FK</i> <i class="b uq">UQ</i> <i class="b cas">cascade</i></td></tr>
+                    <tr><td>created_at / updated_at</td><td class="ty">timestamp</td><td></td></tr>
+                </table>
+            </article>
+
+            <article class="card trx">
+                <header>
+                    <h3>cart_items</h3>
+                    <p>Isi keranjang, boleh campur dari beberapa toko. Pemisahan per toko baru terjadi saat checkout.</p>
+                </header>
+                <table>
+                    <tr><td>id</td><td class="ty">bigint</td><td><i class="b pk">PK</i></td></tr>
+                    <tr><td>cart_id</td><td class="ty">bigint</td><td><i class="b fk">FK</i> <i class="b cas">cascade</i></td></tr>
+                    <tr><td>product_variant_id</td><td class="ty">bigint</td><td><i class="b fk">FK</i> <i class="b cas">cascade</i></td></tr>
+                    <tr><td>quantity</td><td class="ty">integer</td><td>default 1</td></tr>
+                    <tr><td>note</td><td class="ty">text</td><td>catatan untuk seller</td></tr>
+                    <tr><td>created_at / updated_at</td><td class="ty">timestamp</td><td></td></tr>
+                </table>
+                <footer><i class="b uq">UQ</i> cart_id + product_variant_id</footer>
+            </article>
+
+            <article class="card trx">
+                <header>
+                    <h3>wishlists</h3>
+                    <p>Produk favorit user.</p>
+                </header>
+                <table>
+                    <tr><td>id</td><td class="ty">bigint</td><td><i class="b pk">PK</i></td></tr>
+                    <tr><td>user_id</td><td class="ty">bigint</td><td><i class="b fk">FK</i> <i class="b cas">cascade</i></td></tr>
+                    <tr><td>product_id</td><td class="ty">bigint</td><td><i class="b fk">FK</i> <i class="b cas">cascade</i></td></tr>
+                    <tr><td>created_at / updated_at</td><td class="ty">timestamp</td><td></td></tr>
+                </table>
+                <footer><i class="b uq">UQ</i> user_id + product_id</footer>
+            </article>
+
+            <article class="card trx highlight">
+                <header>
+                    <h3>orders</h3>
+                    <p>Order level pembeli: satu checkout, satu pembayaran, walau barang dari beberapa toko. Alamat <b>disalin</b>, bukan direferensi, agar riwayat tidak berubah saat user mengedit alamatnya.</p>
+                </header>
+                <table>
+                    <tr><td>id</td><td class="ty">bigint</td><td><i class="b pk">PK</i></td></tr>
+                    <tr><td>user_id</td><td class="ty">bigint</td><td><i class="b fk">FK</i> <i class="b res">restrict</i></td></tr>
+                    <tr><td>order_number</td><td class="ty">string</td><td><i class="b uq">UQ</i></td></tr>
+                    <tr><td>coupon_id</td><td class="ty">bigint</td><td><i class="b fk">FK</i> <i class="b nl">NULL</i> <i class="b snl">set null</i></td></tr>
+                    <tr><td>recipient_name / recipient_phone</td><td class="ty">string</td><td class="copy">salinan</td></tr>
+                    <tr><td>shipping_street</td><td class="ty">text</td><td class="copy">salinan</td></tr>
+                    <tr><td>shipping_city / state / postal_code / country</td><td class="ty">string</td><td class="copy">salinan</td></tr>
+                    <tr><td>subtotal</td><td class="ty">decimal(14,2)</td><td></td></tr>
+                    <tr><td>shipping_total</td><td class="ty">decimal(14,2)</td><td></td></tr>
+                    <tr><td>discount_total</td><td class="ty">decimal(14,2)</td><td></td></tr>
+                    <tr><td>grand_total</td><td class="ty">decimal(14,2)</td><td></td></tr>
+                    <tr><td>status</td><td class="ty">enum</td><td><span class="en">pending_payment, paid, processing, shipped, completed, cancelled, refunded</span></td></tr>
+                    <tr><td>note</td><td class="ty">text</td><td><i class="b nl">NULL</i></td></tr>
+                    <tr><td>placed_at</td><td class="ty">timestamp</td><td><i class="b nl">NULL</i></td></tr>
+                    <tr><td>created_at / updated_at</td><td class="ty">timestamp</td><td></td></tr>
+                </table>
+            </article>
+
+            <article class="card trx highlight">
+                <header>
+                    <h3>store_orders</h3>
+                    <p>Pecahan order per toko. Inilah yang dilihat dan diproses seller, dengan status yang berjalan sendiri-sendiri.</p>
+                </header>
+                <table>
+                    <tr><td>id</td><td class="ty">bigint</td><td><i class="b pk">PK</i></td></tr>
+                    <tr><td>order_id</td><td class="ty">bigint</td><td><i class="b fk">FK</i> <i class="b cas">cascade</i></td></tr>
+                    <tr><td>store_id</td><td class="ty">bigint</td><td><i class="b fk">FK</i> <i class="b res">restrict</i></td></tr>
+                    <tr><td>store_order_number</td><td class="ty">string</td><td><i class="b uq">UQ</i></td></tr>
+                    <tr><td>subtotal / shipping_cost</td><td class="ty">decimal(14,2)</td><td></td></tr>
+                    <tr><td>discount / total</td><td class="ty">decimal(14,2)</td><td></td></tr>
+                    <tr><td>status</td><td class="ty">enum</td><td><span class="en">pending, processing, shipped, delivered, completed, cancelled, refunded</span></td></tr>
+                    <tr><td>note</td><td class="ty">text</td><td><i class="b nl">NULL</i></td></tr>
+                    <tr><td>created_at / updated_at</td><td class="ty">timestamp</td><td></td></tr>
+                </table>
+                <footer><i class="b uq">UQ</i> order_id + store_id</footer>
+            </article>
+
+            <article class="card trx">
+                <header>
+                    <h3>order_items</h3>
+                    <p>Semua data penting disalin saat checkout, supaya nota lama tetap menampilkan angka yang dulu meski seller mengubah harga.</p>
+                </header>
+                <table>
+                    <tr><td>id</td><td class="ty">bigint</td><td><i class="b pk">PK</i></td></tr>
+                    <tr><td>store_order_id</td><td class="ty">bigint</td><td><i class="b fk">FK</i> <i class="b cas">cascade</i></td></tr>
+                    <tr><td>product_id</td><td class="ty">bigint</td><td><i class="b fk">FK</i> <i class="b nl">NULL</i> <i class="b snl">set null</i></td></tr>
+                    <tr><td>product_variant_id</td><td class="ty">bigint</td><td><i class="b fk">FK</i> <i class="b nl">NULL</i> <i class="b snl">set null</i></td></tr>
+                    <tr><td>product_name</td><td class="ty">string</td><td class="copy">salinan</td></tr>
+                    <tr><td>size_label</td><td class="ty">string(20)</td><td class="copy">salinan</td></tr>
+                    <tr><td>color_name</td><td class="ty">string</td><td class="copy">salinan</td></tr>
+                    <tr><td>unit_price</td><td class="ty">decimal(12,2)</td><td class="copy">salinan</td></tr>
+                    <tr><td>quantity</td><td class="ty">integer</td><td></td></tr>
+                    <tr><td>subtotal</td><td class="ty">decimal(14,2)</td><td></td></tr>
+                    <tr><td>recommended_size_label</td><td class="ty">string(20)</td><td>ukuran saran FitMate saat itu</td></tr>
+                    <tr><td>created_at / updated_at</td><td class="ty">timestamp</td><td></td></tr>
+                </table>
+            </article>
+
+            <article class="card trx">
+                <header>
+                    <h3>payments</h3>
+                    <p>Menempel di order level pembeli, bukan per toko: user bayar sekali, backend yang membagi ke seller.</p>
+                </header>
+                <table>
+                    <tr><td>id</td><td class="ty">bigint</td><td><i class="b pk">PK</i></td></tr>
+                    <tr><td>order_id</td><td class="ty">bigint</td><td><i class="b fk">FK</i> <i class="b cas">cascade</i></td></tr>
+                    <tr><td>method</td><td class="ty">enum</td><td><span class="en">bank_transfer, virtual_account, ewallet, credit_card, cod</span></td></tr>
+                    <tr><td>provider</td><td class="ty">string</td><td><span class="en">midtrans, xendit</span></td></tr>
+                    <tr><td>reference</td><td class="ty">string</td><td><i class="b ix">IDX</i> nomor transaksi provider</td></tr>
+                    <tr><td>amount</td><td class="ty">decimal(14,2)</td><td></td></tr>
+                    <tr><td>status</td><td class="ty">enum</td><td><span class="en">pending, paid, failed, expired, refunded</span></td></tr>
+                    <tr><td>paid_at / expires_at</td><td class="ty">timestamp</td><td><i class="b nl">NULL</i></td></tr>
+                    <tr><td>payload</td><td class="ty">json</td><td>respon mentah provider</td></tr>
+                    <tr><td>created_at / updated_at</td><td class="ty">timestamp</td><td></td></tr>
+                </table>
+            </article>
+
+            <article class="card trx">
+                <header>
+                    <h3>shipments</h3>
+                    <p>Pengiriman per toko, karena tiap toko punya resi sendiri.</p>
+                </header>
+                <table>
+                    <tr><td>id</td><td class="ty">bigint</td><td><i class="b pk">PK</i></td></tr>
+                    <tr><td>store_order_id</td><td class="ty">bigint</td><td><i class="b fk">FK</i> <i class="b cas">cascade</i></td></tr>
+                    <tr><td>courier</td><td class="ty">string</td><td><span class="en">jne, jnt, sicepat</span></td></tr>
+                    <tr><td>service</td><td class="ty">string</td><td><span class="en">reg, yes, cargo</span></td></tr>
+                    <tr><td>tracking_number</td><td class="ty">string</td><td><i class="b ix">IDX</i> nomor resi</td></tr>
+                    <tr><td>cost</td><td class="ty">decimal(12,2)</td><td></td></tr>
+                    <tr><td>weight_gram</td><td class="ty">integer</td><td></td></tr>
+                    <tr><td>status</td><td class="ty">enum</td><td><span class="en">pending, picked_up, in_transit, delivered, failed, returned</span></td></tr>
+                    <tr><td>shipped_at / delivered_at</td><td class="ty">timestamp</td><td><i class="b nl">NULL</i></td></tr>
+                    <tr><td>created_at / updated_at</td><td class="ty">timestamp</td><td></td></tr>
+                </table>
+            </article>
+
+            <article class="card trx">
+                <header>
+                    <h3>product_reviews</h3>
+                    <p>Selain rating biasa, ada <code>fit_feedback</code> yang jadi bahan koreksi standar ukuran FitMate.</p>
+                </header>
+                <table>
+                    <tr><td>id</td><td class="ty">bigint</td><td><i class="b pk">PK</i></td></tr>
+                    <tr><td>product_id</td><td class="ty">bigint</td><td><i class="b fk">FK</i> <i class="b cas">cascade</i></td></tr>
+                    <tr><td>user_id</td><td class="ty">bigint</td><td><i class="b fk">FK</i> <i class="b cas">cascade</i></td></tr>
+                    <tr><td>order_item_id</td><td class="ty">bigint</td><td><i class="b fk">FK</i> <i class="b uq">UQ</i> <i class="b nl">NULL</i> &mdash; sekali review per item</td></tr>
+                    <tr><td>rating</td><td class="ty">tinyint</td><td>1&ndash;5</td></tr>
+                    <tr><td>comment</td><td class="ty">text</td><td><i class="b nl">NULL</i></td></tr>
+                    <tr><td>fit_feedback</td><td class="ty">enum</td><td><span class="en">too_small, slightly_small, true_to_size, slightly_large, too_large</span></td></tr>
+                    <tr><td>size_purchased</td><td class="ty">string(20)</td><td><i class="b nl">NULL</i></td></tr>
+                    <tr><td>is_verified_purchase</td><td class="ty">boolean</td><td></td></tr>
+                    <tr><td>created_at / updated_at</td><td class="ty">timestamp</td><td></td></tr>
+                </table>
+            </article>
+
+            <article class="card trx">
+                <header>
+                    <h3>coupons</h3>
+                    <p><code>store_id</code> null berarti kupon milik FitMate yang berlaku di semua toko.</p>
+                </header>
+                <table>
+                    <tr><td>id</td><td class="ty">bigint</td><td><i class="b pk">PK</i></td></tr>
+                    <tr><td>store_id</td><td class="ty">bigint</td><td><i class="b fk">FK</i> <i class="b nl">NULL</i> <i class="b cas">cascade</i></td></tr>
+                    <tr><td>code</td><td class="ty">string</td><td><i class="b uq">UQ</i></td></tr>
+                    <tr><td>name / description</td><td class="ty">string</td><td></td></tr>
+                    <tr><td>type</td><td class="ty">enum</td><td><span class="en">percentage, fixed</span></td></tr>
+                    <tr><td>value</td><td class="ty">decimal(12,2)</td><td></td></tr>
+                    <tr><td>min_purchase</td><td class="ty">decimal(12,2)</td><td>minimal belanja</td></tr>
+                    <tr><td>max_discount</td><td class="ty">decimal(12,2)</td><td>batas potongan tipe persen</td></tr>
+                    <tr><td>usage_limit</td><td class="ty">integer</td><td>null = tanpa batas</td></tr>
+                    <tr><td>used_count</td><td class="ty">integer</td><td></td></tr>
+                    <tr><td>starts_at</td><td class="ty">timestamp</td><td><i class="b nl">NULL</i></td></tr>
+                    <tr><td>expiry_date</td><td class="ty">date</td><td></td></tr>
+                    <tr><td>is_active</td><td class="ty">boolean</td><td></td></tr>
+                    <tr><td>created_at / updated_at</td><td class="ty">timestamp</td><td></td></tr>
+                </table>
+            </article>
+
+            <article class="card trx">
+                <header>
+                    <h3>coupon_usages</h3>
+                    <p>Riwayat pemakaian kupon, penahan agar user tidak memakai kupon yang sama berkali-kali.</p>
+                </header>
+                <table>
+                    <tr><td>id</td><td class="ty">bigint</td><td><i class="b pk">PK</i></td></tr>
+                    <tr><td>coupon_id</td><td class="ty">bigint</td><td><i class="b fk">FK</i> <i class="b cas">cascade</i></td></tr>
+                    <tr><td>user_id</td><td class="ty">bigint</td><td><i class="b fk">FK</i> <i class="b cas">cascade</i></td></tr>
+                    <tr><td>order_id</td><td class="ty">bigint</td><td><i class="b fk">FK</i> <i class="b cas">cascade</i></td></tr>
+                    <tr><td>discount_amount</td><td class="ty">decimal(14,2)</td><td></td></tr>
+                    <tr><td>used_at</td><td class="ty">timestamp</td><td><i class="b nl">NULL</i></td></tr>
+                    <tr><td>created_at / updated_at</td><td class="ty">timestamp</td><td></td></tr>
+                </table>
+                <footer><i class="b uq">UQ</i> coupon_id + order_id</footer>
+            </article>
+
+            <article class="card trx">
+                <header>
+                    <h3>banner_promos</h3>
+                    <p>Banner promosi di halaman depan dan halaman promo. Tidak punya relasi ke tabel lain.</p>
+                </header>
+                <table>
+                    <tr><td>id</td><td class="ty">bigint</td><td><i class="b pk">PK</i></td></tr>
+                    <tr><td>title / subtitle</td><td class="ty">string</td><td></td></tr>
+                    <tr><td>image</td><td class="ty">string</td><td></td></tr>
+                    <tr><td>link_url</td><td class="ty">string</td><td>arah tujuan banner</td></tr>
+                    <tr><td>placement</td><td class="ty">enum</td><td><span class="en">home_hero, home_middle, category, promo_page</span></td></tr>
+                    <tr><td>sort_order</td><td class="ty">smallint</td><td></td></tr>
+                    <tr><td>starts_at / ends_at</td><td class="ty">timestamp</td><td>masa tayang</td></tr>
+                    <tr><td>is_active</td><td class="ty">boolean</td><td></td></tr>
+                    <tr><td>created_at / updated_at</td><td class="ty">timestamp</td><td></td></tr>
+                </table>
+            </article>
+
+        </div>
+    </section>
+
+    <!-- ============ GRUP 5: SISTEM ============ -->
+    <section id="g5">
+        <h2><span class="dot sys"></span> Tabel Sistem Laravel</h2>
+        <p class="sub">Bawaan framework untuk cache dan antrian, tidak berkaitan dengan logika bisnis.</p>
+        <div class="cards small">
+
+            <article class="card sys">
+                <header><h3>cache</h3><p>Penyimpanan cache driver database.</p></header>
+                <table>
+                    <tr><td>key</td><td class="ty">string</td><td><i class="b pk">PK</i></td></tr>
+                    <tr><td>value</td><td class="ty">mediumtext</td><td></td></tr>
+                    <tr><td>expiration</td><td class="ty">bigint</td><td><i class="b ix">IDX</i></td></tr>
+                </table>
+            </article>
+
+            <article class="card sys">
+                <header><h3>cache_locks</h3><p>Kunci atomic lock.</p></header>
+                <table>
+                    <tr><td>key</td><td class="ty">string</td><td><i class="b pk">PK</i></td></tr>
+                    <tr><td>owner</td><td class="ty">string</td><td></td></tr>
+                    <tr><td>expiration</td><td class="ty">bigint</td><td><i class="b ix">IDX</i></td></tr>
+                </table>
+            </article>
+
+            <article class="card sys">
+                <header><h3>jobs</h3><p>Antrian pekerjaan yang menunggu diproses.</p></header>
+                <table>
+                    <tr><td>id</td><td class="ty">bigint</td><td><i class="b pk">PK</i></td></tr>
+                    <tr><td>queue</td><td class="ty">string</td><td><i class="b ix">IDX</i></td></tr>
+                    <tr><td>payload</td><td class="ty">longtext</td><td></td></tr>
+                    <tr><td>attempts</td><td class="ty">smallint</td><td></td></tr>
+                    <tr><td>reserved_at</td><td class="ty">integer</td><td><i class="b nl">NULL</i></td></tr>
+                    <tr><td>available_at</td><td class="ty">integer</td><td></td></tr>
+                    <tr><td>created_at</td><td class="ty">integer</td><td></td></tr>
+                </table>
+            </article>
+
+            <article class="card sys">
+                <header><h3>job_batches</h3><p>Kelompok job yang dijalankan bersama.</p></header>
+                <table>
+                    <tr><td>id</td><td class="ty">string</td><td><i class="b pk">PK</i></td></tr>
+                    <tr><td>name</td><td class="ty">string</td><td></td></tr>
+                    <tr><td>total_jobs / pending_jobs / failed_jobs</td><td class="ty">integer</td><td></td></tr>
+                    <tr><td>failed_job_ids</td><td class="ty">longtext</td><td></td></tr>
+                    <tr><td>options</td><td class="ty">mediumtext</td><td><i class="b nl">NULL</i></td></tr>
+                    <tr><td>cancelled_at / finished_at</td><td class="ty">integer</td><td><i class="b nl">NULL</i></td></tr>
+                    <tr><td>created_at</td><td class="ty">integer</td><td></td></tr>
+                </table>
+            </article>
+
+            <article class="card sys">
+                <header><h3>failed_jobs</h3><p>Job yang gagal beserta pesan errornya.</p></header>
+                <table>
+                    <tr><td>id</td><td class="ty">bigint</td><td><i class="b pk">PK</i></td></tr>
+                    <tr><td>uuid</td><td class="ty">string</td><td><i class="b uq">UQ</i></td></tr>
+                    <tr><td>connection / queue</td><td class="ty">string</td><td></td></tr>
+                    <tr><td>payload / exception</td><td class="ty">longtext</td><td></td></tr>
+                    <tr><td>failed_at</td><td class="ty">timestamp</td><td>default sekarang</td></tr>
+                </table>
+                <footer><i class="b ix">IDX</i> connection + queue + failed_at</footer>
+            </article>
+
+        </div>
+    </section>
+
+    <!-- ============ TABEL DETAIL ============ -->
+    <section id="detail">
+        <h2>Tabel Detail Seluruh Kolom</h2>
+        <p class="sub">
+            Versi tabel lengkap: <b>nama kolom</b>, <b>tipe data</b>, <b>PK/FK beserta tabel tujuan relasinya</b>,
+            dan <b>fungsi tiap kolom</b>. Cocok untuk disalin ke laporan atau dicari cepat dengan Ctrl+F.
+        </p>
+
+        <h3 class="dt-group user"><span class="dot user"></span> Pengguna &amp; Autentikasi</h3>
+
+        <div class="dt">
+            <div class="dt-head">
+                <h4>users</h4>
+                <p>Akun semua peran: pembeli, seller, customer service, admin, superadmin.</p>
+            </div>
+            <div class="dt-scroll">
+            <table class="doc">
+                <thead>
+                    <tr><th>Nama Kolom</th><th>Tipe Data</th><th>PK / FK</th><th>Fungsi Kolom</th></tr>
+                </thead>
+                <tbody>
+                    <tr><td class="c">id</td><td class="t">bigint unsigned</td><td><i class="b pk">PK</i></td><td>Nomor identitas unik setiap pengguna.</td></tr>
+                    <tr><td class="c">name</td><td class="t">varchar(255)</td><td>&mdash;</td><td>Nama lengkap pengguna.</td></tr>
+                    <tr><td class="c">email</td><td class="t">varchar(255)</td><td><i class="b uq">UQ</i></td><td>Email untuk login, tidak boleh kembar.</td></tr>
+                    <tr><td class="c">phone_number</td><td class="t">varchar(255) null</td><td>&mdash;</td><td>Nomor telepon untuk kontak dan verifikasi.</td></tr>
+                    <tr><td class="c">profile_picture</td><td class="t">varchar(255) null</td><td>&mdash;</td><td>Path file foto profil.</td></tr>
+                    <tr><td class="c">gender</td><td class="t">enum(male, female) null</td><td>&mdash;</td><td>Jenis kelamin, jadi acuan awal pemilihan size chart.</td></tr>
+                    <tr><td class="c">role</td><td class="t">enum(user, seller, customerservice, admin, superadmin)</td><td>&mdash;</td><td>Peran pengguna, penentu hak akses. Default <code>user</code>.</td></tr>
+                    <tr><td class="c">status</td><td class="t">enum(active, inactive)</td><td>&mdash;</td><td>Status akun aktif atau dinonaktifkan admin.</td></tr>
+                    <tr><td class="c">email_verified_at</td><td class="t">timestamp null</td><td>&mdash;</td><td>Waktu email diverifikasi. Null berarti belum.</td></tr>
+                    <tr><td class="c">password</td><td class="t">varchar(255)</td><td>&mdash;</td><td>Kata sandi yang sudah di-hash bcrypt.</td></tr>
+                    <tr><td class="c">remember_token</td><td class="t">varchar(100) null</td><td>&mdash;</td><td>Token fitur "ingat saya" saat login.</td></tr>
+                    <tr><td class="c">created_at</td><td class="t">timestamp null</td><td>&mdash;</td><td>Waktu akun dibuat.</td></tr>
+                    <tr><td class="c">updated_at</td><td class="t">timestamp null</td><td>&mdash;</td><td>Waktu data terakhir diubah.</td></tr>
+                </tbody>
+            </table>
+            </div>
+        </div>
+
+        <div class="dt">
+            <div class="dt-head">
+                <h4>password_reset_tokens</h4>
+                <p>Token sementara untuk proses lupa password.</p>
+            </div>
+            <div class="dt-scroll">
+            <table class="doc">
+                <thead><tr><th>Nama Kolom</th><th>Tipe Data</th><th>PK / FK</th><th>Fungsi Kolom</th></tr></thead>
+                <tbody>
+                    <tr><td class="c">email</td><td class="t">varchar(255)</td><td><i class="b pk">PK</i></td><td>Email pemilik permintaan reset, sekaligus kunci utama.</td></tr>
+                    <tr><td class="c">token</td><td class="t">varchar(255)</td><td>&mdash;</td><td>Kode rahasia yang dikirim ke email pengguna.</td></tr>
+                    <tr><td class="c">created_at</td><td class="t">timestamp null</td><td>&mdash;</td><td>Waktu token dibuat, dipakai menghitung masa berlaku.</td></tr>
+                </tbody>
+            </table>
+            </div>
+        </div>
+
+        <div class="dt">
+            <div class="dt-head">
+                <h4>sessions</h4>
+                <p>Penyimpanan sesi login karena <code>SESSION_DRIVER</code> memakai database.</p>
+            </div>
+            <div class="dt-scroll">
+            <table class="doc">
+                <thead><tr><th>Nama Kolom</th><th>Tipe Data</th><th>PK / FK</th><th>Fungsi Kolom</th></tr></thead>
+                <tbody>
+                    <tr><td class="c">id</td><td class="t">varchar(255)</td><td><i class="b pk">PK</i></td><td>ID sesi yang disimpan di cookie browser.</td></tr>
+                    <tr><td class="c">user_id</td><td class="t">bigint unsigned null</td><td><i class="b ix">IDX</i> &rarr; <b>users.id</b> <span class="rel">tanpa constraint</span></td><td>Pemilik sesi. Null kalau pengunjung belum login.</td></tr>
+                    <tr><td class="c">ip_address</td><td class="t">varchar(45) null</td><td>&mdash;</td><td>Alamat IP pengakses, untuk keamanan.</td></tr>
+                    <tr><td class="c">user_agent</td><td class="t">text null</td><td>&mdash;</td><td>Informasi browser dan perangkat.</td></tr>
+                    <tr><td class="c">payload</td><td class="t">longtext</td><td>&mdash;</td><td>Isi data sesi dalam bentuk terenkode.</td></tr>
+                    <tr><td class="c">last_activity</td><td class="t">int</td><td><i class="b ix">IDX</i></td><td>Waktu aktivitas terakhir, dipakai membersihkan sesi mati.</td></tr>
+                </tbody>
+            </table>
+            </div>
+        </div>
+
+        <div class="dt">
+            <div class="dt-head">
+                <h4>user_addresses</h4>
+                <p>Buku alamat pengiriman milik pengguna.</p>
+            </div>
+            <div class="dt-scroll">
+            <table class="doc">
+                <thead><tr><th>Nama Kolom</th><th>Tipe Data</th><th>PK / FK</th><th>Fungsi Kolom</th></tr></thead>
+                <tbody>
+                    <tr><td class="c">id</td><td class="t">bigint unsigned</td><td><i class="b pk">PK</i></td><td>Identitas unik tiap alamat.</td></tr>
+                    <tr><td class="c">user_id</td><td class="t">bigint unsigned</td><td><i class="b fk">FK</i> &rarr; <b>users.id</b> <i class="b cas">cascade</i></td><td>Pemilik alamat. Alamat ikut terhapus bila akun dihapus.</td></tr>
+                    <tr><td class="c">label</td><td class="t">varchar(255)</td><td>&mdash;</td><td>Penanda alamat: Home, Work, Other. Default <code>Home</code>.</td></tr>
+                    <tr><td class="c">recipient_name</td><td class="t">varchar(255)</td><td>&mdash;</td><td>Nama penerima paket, bisa beda dari nama akun.</td></tr>
+                    <tr><td class="c">recipient_phone</td><td class="t">varchar(255)</td><td>&mdash;</td><td>Nomor telepon penerima untuk dihubungi kurir.</td></tr>
+                    <tr><td class="c">street</td><td class="t">text</td><td>&mdash;</td><td>Alamat jalan lengkap beserta detail patokan.</td></tr>
+                    <tr><td class="c">city</td><td class="t">varchar(255)</td><td>&mdash;</td><td>Kota atau kabupaten tujuan.</td></tr>
+                    <tr><td class="c">state</td><td class="t">varchar(255)</td><td>&mdash;</td><td>Provinsi tujuan.</td></tr>
+                    <tr><td class="c">postal_code</td><td class="t">varchar(255)</td><td>&mdash;</td><td>Kode pos, dipakai hitung ongkos kirim.</td></tr>
+                    <tr><td class="c">country</td><td class="t">varchar(255)</td><td>&mdash;</td><td>Negara tujuan pengiriman.</td></tr>
+                    <tr><td class="c">is_default</td><td class="t">tinyint(1)</td><td>&mdash;</td><td>Menandai alamat utama yang dipilih otomatis saat checkout.</td></tr>
+                    <tr><td class="c">created_at</td><td class="t">timestamp null</td><td>&mdash;</td><td>Waktu alamat ditambahkan.</td></tr>
+                    <tr><td class="c">updated_at</td><td class="t">timestamp null</td><td>&mdash;</td><td>Waktu alamat terakhir diubah.</td></tr>
+                </tbody>
+            </table>
+            </div>
+        </div>
+
+        <div class="dt">
+            <div class="dt-head">
+                <h4>user_body_profiles</h4>
+                <p>Identitas profil badan. Satu user boleh punya beberapa profil (diri sendiri, pasangan, adik).</p>
+            </div>
+            <div class="dt-scroll">
+            <table class="doc">
+                <thead><tr><th>Nama Kolom</th><th>Tipe Data</th><th>PK / FK</th><th>Fungsi Kolom</th></tr></thead>
+                <tbody>
+                    <tr><td class="c">id</td><td class="t">bigint unsigned</td><td><i class="b pk">PK</i></td><td>Identitas unik tiap profil badan.</td></tr>
+                    <tr><td class="c">user_id</td><td class="t">bigint unsigned</td><td><i class="b fk">FK</i> &rarr; <b>users.id</b> <i class="b cas">cascade</i></td><td>Pemilik profil badan.</td></tr>
+                    <tr><td class="c">profile_name</td><td class="t">varchar(255)</td><td>&mdash;</td><td>Nama profil agar mudah dibedakan. Default <code>Profil Saya</code>.</td></tr>
+                    <tr><td class="c">gender</td><td class="t">enum(male, female) null</td><td>&mdash;</td><td>Jenis kelamin profil, penentu size chart yang dipakai.</td></tr>
+                    <tr><td class="c">is_default</td><td class="t">tinyint(1)</td><td>&mdash;</td><td>Profil utama yang dipakai bila user tidak memilih.</td></tr>
+                    <tr><td class="c">created_at</td><td class="t">timestamp null</td><td>&mdash;</td><td>Waktu profil dibuat.</td></tr>
+                    <tr><td class="c">updated_at</td><td class="t">timestamp null</td><td>&mdash;</td><td>Waktu profil terakhir diubah.</td></tr>
+                </tbody>
+            </table>
+            </div>
+        </div>
+
+        <h3 class="dt-group core"><span class="dot core"></span> Sistem Ukuran &mdash; Inti FitMate</h3>
+
+        <div class="dt">
+            <div class="dt-head">
+                <h4>body_measurements</h4>
+                <p>Kamus dimensi ukur. Dipakai bersama oleh ukuran badan user, standar FitMate, dan ukuran produk.</p>
+            </div>
+            <div class="dt-scroll">
+            <table class="doc">
+                <thead><tr><th>Nama Kolom</th><th>Tipe Data</th><th>PK / FK</th><th>Fungsi Kolom</th></tr></thead>
+                <tbody>
+                    <tr><td class="c">id</td><td class="t">bigint unsigned</td><td><i class="b pk">PK</i></td><td>Identitas unik tiap dimensi ukur.</td></tr>
+                    <tr><td class="c">key</td><td class="t">varchar(255)</td><td><i class="b uq">UQ</i></td><td>Kode dimensi yang dipakai program, contoh <code>lingkar_dada</code>.</td></tr>
+                    <tr><td class="c">label</td><td class="t">varchar(255)</td><td>&mdash;</td><td>Nama dimensi yang ditampilkan ke user, contoh "Lingkar Dada".</td></tr>
+                    <tr><td class="c">description</td><td class="t">varchar(255) null</td><td>&mdash;</td><td>Panduan cara mengukur dimensi tersebut.</td></tr>
+                    <tr><td class="c">unit</td><td class="t">varchar(10)</td><td>&mdash;</td><td>Satuan ukuran: cm atau kg. Default <code>cm</code>.</td></tr>
+                    <tr><td class="c">applies_to</td><td class="t">enum(general, top, bottom, footwear)</td><td>&mdash;</td><td>Kelompok pakai dimensi. <code>general</code> untuk tinggi &amp; berat badan.</td></tr>
+                    <tr><td class="c">sort_order</td><td class="t">smallint unsigned</td><td>&mdash;</td><td>Urutan tampil dimensi di form pengisian.</td></tr>
+                    <tr><td class="c">is_active</td><td class="t">tinyint(1)</td><td>&mdash;</td><td>Menonaktifkan dimensi tanpa menghapus datanya.</td></tr>
+                    <tr><td class="c">created_at</td><td class="t">timestamp null</td><td>&mdash;</td><td>Waktu dimensi dibuat.</td></tr>
+                    <tr><td class="c">updated_at</td><td class="t">timestamp null</td><td>&mdash;</td><td>Waktu dimensi terakhir diubah.</td></tr>
+                </tbody>
+            </table>
+            </div>
+        </div>
+
+        <div class="dt">
+            <div class="dt-head">
+                <h4>user_body_measurements</h4>
+                <p>Angka ukuran badan user, satu baris untuk satu dimensi.</p>
+            </div>
+            <div class="dt-scroll">
+            <table class="doc">
+                <thead><tr><th>Nama Kolom</th><th>Tipe Data</th><th>PK / FK</th><th>Fungsi Kolom</th></tr></thead>
+                <tbody>
+                    <tr><td class="c">id</td><td class="t">bigint unsigned</td><td><i class="b pk">PK</i></td><td>Identitas unik tiap baris ukuran.</td></tr>
+                    <tr><td class="c">user_body_profile_id</td><td class="t">bigint unsigned</td><td><i class="b fk">FK</i> &rarr; <b>user_body_profiles.id</b> <i class="b cas">cascade</i></td><td>Profil badan pemilik angka ukuran ini.</td></tr>
+                    <tr><td class="c">body_measurement_id</td><td class="t">bigint unsigned</td><td><i class="b fk">FK</i> &rarr; <b>body_measurements.id</b> <i class="b cas">cascade</i></td><td>Dimensi yang diukur, contoh lingkar dada.</td></tr>
+                    <tr><td class="c">value</td><td class="t">decimal(6,2)</td><td>&mdash;</td><td>Nilai ukuran badan, contoh 96,50 cm.</td></tr>
+                    <tr><td class="c">created_at</td><td class="t">timestamp null</td><td>&mdash;</td><td>Waktu ukuran diisi.</td></tr>
+                    <tr><td class="c">updated_at</td><td class="t">timestamp null</td><td>&mdash;</td><td>Waktu ukuran terakhir diperbarui.</td></tr>
+                </tbody>
+            </table>
+            </div>
+            <p class="dt-note"><i class="b uq">UQ</i> <code>user_body_profile_id + body_measurement_id</code> &mdash; satu dimensi hanya boleh sekali per profil.</p>
+        </div>
+
+        <div class="dt">
+            <div class="dt-head">
+                <h4>size_charts</h4>
+                <p>Standar ukuran resmi FitMate. Hanya admin yang boleh mengubah.</p>
+            </div>
+            <div class="dt-scroll">
+            <table class="doc">
+                <thead><tr><th>Nama Kolom</th><th>Tipe Data</th><th>PK / FK</th><th>Fungsi Kolom</th></tr></thead>
+                <tbody>
+                    <tr><td class="c">id</td><td class="t">bigint unsigned</td><td><i class="b pk">PK</i></td><td>Identitas unik tiap standar ukuran.</td></tr>
+                    <tr><td class="c">name</td><td class="t">varchar(255)</td><td>&mdash;</td><td>Nama chart, contoh "Atasan Pria".</td></tr>
+                    <tr><td class="c">slug</td><td class="t">varchar(255)</td><td><i class="b uq">UQ</i></td><td>Versi URL dari nama chart.</td></tr>
+                    <tr><td class="c">size_type</td><td class="t">enum(top, bottom, footwear)</td><td>&mdash;</td><td>Jenis ukuran yang dicakup chart ini.</td></tr>
+                    <tr><td class="c">gender</td><td class="t">enum(male, female, unisex)</td><td>&mdash;</td><td>Target jenis kelamin chart.</td></tr>
+                    <tr><td class="c">description</td><td class="t">text null</td><td>&mdash;</td><td>Keterangan tambahan standar ukuran.</td></tr>
+                    <tr><td class="c">is_active</td><td class="t">tinyint(1)</td><td>&mdash;</td><td>Menandai chart masih dipakai atau tidak.</td></tr>
+                    <tr><td class="c">created_at</td><td class="t">timestamp null</td><td>&mdash;</td><td>Waktu chart dibuat.</td></tr>
+                    <tr><td class="c">updated_at</td><td class="t">timestamp null</td><td>&mdash;</td><td>Waktu chart terakhir diubah.</td></tr>
+                </tbody>
+            </table>
+            </div>
+            <p class="dt-note"><i class="b uq">UQ</i> <code>size_type + gender</code> &mdash; hanya boleh ada satu standar per kombinasi.</p>
+        </div>
+
+        <div class="dt">
+            <div class="dt-head">
+                <h4>size_chart_entries</h4>
+                <p>Baris label ukuran di dalam chart: S, M, L, XL, atau 40, 41, 42.</p>
+            </div>
+            <div class="dt-scroll">
+            <table class="doc">
+                <thead><tr><th>Nama Kolom</th><th>Tipe Data</th><th>PK / FK</th><th>Fungsi Kolom</th></tr></thead>
+                <tbody>
+                    <tr><td class="c">id</td><td class="t">bigint unsigned</td><td><i class="b pk">PK</i></td><td>Identitas unik tiap label ukuran.</td></tr>
+                    <tr><td class="c">size_chart_id</td><td class="t">bigint unsigned</td><td><i class="b fk">FK</i> &rarr; <b>size_charts.id</b> <i class="b cas">cascade</i></td><td>Chart induk tempat label ini berada.</td></tr>
+                    <tr><td class="c">label</td><td class="t">varchar(20)</td><td>&mdash;</td><td>Tulisan ukuran yang dilihat pembeli, contoh XL.</td></tr>
+                    <tr><td class="c">sort_order</td><td class="t">smallint unsigned</td><td>&mdash;</td><td>Urutan ukuran agar XS &lt; S &lt; M &lt; L &lt; XL tampil benar.</td></tr>
+                    <tr><td class="c">is_active</td><td class="t">tinyint(1)</td><td>&mdash;</td><td>Menonaktifkan label tanpa menghapusnya.</td></tr>
+                    <tr><td class="c">created_at</td><td class="t">timestamp null</td><td>&mdash;</td><td>Waktu label dibuat.</td></tr>
+                    <tr><td class="c">updated_at</td><td class="t">timestamp null</td><td>&mdash;</td><td>Waktu label terakhir diubah.</td></tr>
+                </tbody>
+            </table>
+            </div>
+            <p class="dt-note"><i class="b uq">UQ</i> <code>size_chart_id + label</code> &mdash; label tidak boleh kembar dalam satu chart.</p>
+        </div>
+
+        <div class="dt">
+            <div class="dt-head">
+                <h4>size_chart_entry_measurements</h4>
+                <p>Inti standarisasi: menjawab "XL itu berapa?". Contoh: XL + lingkar dada &rarr; 104&ndash;108 cm.</p>
+            </div>
+            <div class="dt-scroll">
+            <table class="doc">
+                <thead><tr><th>Nama Kolom</th><th>Tipe Data</th><th>PK / FK</th><th>Fungsi Kolom</th></tr></thead>
+                <tbody>
+                    <tr><td class="c">id</td><td class="t">bigint unsigned</td><td><i class="b pk">PK</i></td><td>Identitas unik tiap rentang ukuran.</td></tr>
+                    <tr><td class="c">size_chart_entry_id</td><td class="t">bigint unsigned</td><td><i class="b fk">FK</i> &rarr; <b>size_chart_entries.id</b> <i class="b cas">cascade</i></td><td>Label ukuran yang sedang didefinisikan.</td></tr>
+                    <tr><td class="c">body_measurement_id</td><td class="t">bigint unsigned</td><td><i class="b fk">FK</i> &rarr; <b>body_measurements.id</b> <i class="b cas">cascade</i></td><td>Dimensi tubuh yang diatur rentangnya.</td></tr>
+                    <tr><td class="c">min_value</td><td class="t">decimal(6,2)</td><td>&mdash;</td><td>Batas bawah ukuran badan yang masuk label ini.</td></tr>
+                    <tr><td class="c">max_value</td><td class="t">decimal(6,2)</td><td>&mdash;</td><td>Batas atas ukuran badan yang masuk label ini.</td></tr>
+                    <tr><td class="c">created_at</td><td class="t">timestamp null</td><td>&mdash;</td><td>Waktu rentang dibuat.</td></tr>
+                    <tr><td class="c">updated_at</td><td class="t">timestamp null</td><td>&mdash;</td><td>Waktu rentang terakhir disetel ulang.</td></tr>
+                </tbody>
+            </table>
+            </div>
+            <p class="dt-note"><i class="b uq">UQ</i> <code>size_chart_entry_id + body_measurement_id</code> &mdash; satu dimensi satu rentang per label.</p>
+        </div>
+
+        <div class="dt">
+            <div class="dt-head">
+                <h4>product_measurements</h4>
+                <p>Ukuran fisik barang jadi per varian yang diisi seller, bahan verifikasi admin.</p>
+            </div>
+            <div class="dt-scroll">
+            <table class="doc">
+                <thead><tr><th>Nama Kolom</th><th>Tipe Data</th><th>PK / FK</th><th>Fungsi Kolom</th></tr></thead>
+                <tbody>
+                    <tr><td class="c">id</td><td class="t">bigint unsigned</td><td><i class="b pk">PK</i></td><td>Identitas unik tiap ukuran produk.</td></tr>
+                    <tr><td class="c">product_variant_id</td><td class="t">bigint unsigned</td><td><i class="b fk">FK</i> &rarr; <b>product_variants.id</b> <i class="b cas">cascade</i></td><td>Varian produk yang diukur.</td></tr>
+                    <tr><td class="c">body_measurement_id</td><td class="t">bigint unsigned</td><td><i class="b fk">FK</i> &rarr; <b>body_measurements.id</b> <i class="b cas">cascade</i></td><td>Dimensi yang diukur pada barang tersebut.</td></tr>
+                    <tr><td class="c">value</td><td class="t">decimal(6,2)</td><td>&mdash;</td><td>Angka ukuran asli barang, dibandingkan dengan rentang standar.</td></tr>
+                    <tr><td class="c">created_at</td><td class="t">timestamp null</td><td>&mdash;</td><td>Waktu ukuran diisi seller.</td></tr>
+                    <tr><td class="c">updated_at</td><td class="t">timestamp null</td><td>&mdash;</td><td>Waktu ukuran terakhir diperbarui.</td></tr>
+                </tbody>
+            </table>
+            </div>
+            <p class="dt-note"><i class="b uq">UQ</i> <code>product_variant_id + body_measurement_id</code></p>
+        </div>
+
+        <div class="dt">
+            <div class="dt-head">
+                <h4>size_recommendations</h4>
+                <p>Cache hasil perhitungan rekomendasi ukuran, sekaligus data analitik.</p>
+            </div>
+            <div class="dt-scroll">
+            <table class="doc">
+                <thead><tr><th>Nama Kolom</th><th>Tipe Data</th><th>PK / FK</th><th>Fungsi Kolom</th></tr></thead>
+                <tbody>
+                    <tr><td class="c">id</td><td class="t">bigint unsigned</td><td><i class="b pk">PK</i></td><td>Identitas unik tiap hasil rekomendasi.</td></tr>
+                    <tr><td class="c">user_body_profile_id</td><td class="t">bigint unsigned</td><td><i class="b fk">FK</i> &rarr; <b>user_body_profiles.id</b> <i class="b cas">cascade</i></td><td>Profil badan yang dihitung.</td></tr>
+                    <tr><td class="c">size_chart_id</td><td class="t">bigint unsigned</td><td><i class="b fk">FK</i> &rarr; <b>size_charts.id</b> <i class="b cas">cascade</i></td><td>Standar ukuran yang dipakai membandingkan.</td></tr>
+                    <tr><td class="c">size_chart_entry_id</td><td class="t">bigint unsigned null</td><td><i class="b fk">FK</i> &rarr; <b>size_chart_entries.id</b> <i class="b snl">set null</i></td><td>Hasil rekomendasinya, contoh XL.</td></tr>
+                    <tr><td class="c">product_id</td><td class="t">bigint unsigned null</td><td><i class="b fk">FK</i> &rarr; <b>products.id</b> <i class="b cas">cascade</i></td><td>Produk terkait. Null berarti rekomendasi umum per chart.</td></tr>
+                    <tr><td class="c">fit_status</td><td class="t">enum(tight, fit, loose)</td><td>&mdash;</td><td>Perkiraan rasa pakai: sempit, pas, atau longgar.</td></tr>
+                    <tr><td class="c">fit_score</td><td class="t">decimal(5,2)</td><td>&mdash;</td><td>Skor keyakinan 0&ndash;100 terhadap rekomendasi.</td></tr>
+                    <tr><td class="c">matched_measurements</td><td class="t">tinyint unsigned</td><td>&mdash;</td><td>Jumlah dimensi yang masuk rentang ukuran.</td></tr>
+                    <tr><td class="c">total_measurements</td><td class="t">tinyint unsigned</td><td>&mdash;</td><td>Jumlah dimensi yang dibandingkan.</td></tr>
+                    <tr><td class="c">computed_at</td><td class="t">timestamp null</td><td>&mdash;</td><td>Waktu perhitungan dijalankan, penanda cache basi.</td></tr>
+                    <tr><td class="c">created_at</td><td class="t">timestamp null</td><td>&mdash;</td><td>Waktu baris dibuat.</td></tr>
+                    <tr><td class="c">updated_at</td><td class="t">timestamp null</td><td>&mdash;</td><td>Waktu baris terakhir diperbarui.</td></tr>
+                </tbody>
+            </table>
+            </div>
+            <p class="dt-note"><i class="b uq">UQ</i> <code>user_body_profile_id + size_chart_id + product_id</code></p>
+        </div>
+
+        <h3 class="dt-group cat"><span class="dot cat"></span> Toko &amp; Katalog Produk</h3>
+
+        <div class="dt">
+            <div class="dt-head">
+                <h4>stores</h4>
+                <p>Toko milik seller pihak ketiga.</p>
+            </div>
+            <div class="dt-scroll">
+            <table class="doc">
+                <thead><tr><th>Nama Kolom</th><th>Tipe Data</th><th>PK / FK</th><th>Fungsi Kolom</th></tr></thead>
+                <tbody>
+                    <tr><td class="c">id</td><td class="t">bigint unsigned</td><td><i class="b pk">PK</i></td><td>Identitas unik tiap toko.</td></tr>
+                    <tr><td class="c">user_id</td><td class="t">bigint unsigned</td><td><i class="b fk">FK</i> &rarr; <b>users.id</b> <i class="b cas">cascade</i></td><td>Akun seller pemilik toko.</td></tr>
+                    <tr><td class="c">name</td><td class="t">varchar(255)</td><td>&mdash;</td><td>Nama toko yang ditampilkan ke pembeli.</td></tr>
+                    <tr><td class="c">slug</td><td class="t">varchar(255)</td><td><i class="b uq">UQ</i></td><td>Versi URL nama toko.</td></tr>
+                    <tr><td class="c">description</td><td class="t">text null</td><td>&mdash;</td><td>Deskripsi dan profil singkat toko.</td></tr>
+                    <tr><td class="c">logo</td><td class="t">varchar(255) null</td><td>&mdash;</td><td>Path gambar logo toko.</td></tr>
+                    <tr><td class="c">banner</td><td class="t">varchar(255) null</td><td>&mdash;</td><td>Path gambar spanduk halaman toko.</td></tr>
+                    <tr><td class="c">phone_number</td><td class="t">varchar(255) null</td><td>&mdash;</td><td>Kontak telepon toko.</td></tr>
+                    <tr><td class="c">email</td><td class="t">varchar(255) null</td><td>&mdash;</td><td>Kontak email toko.</td></tr>
+                    <tr><td class="c">street</td><td class="t">text null</td><td>&mdash;</td><td>Alamat asal pengiriman barang.</td></tr>
+                    <tr><td class="c">city</td><td class="t">varchar(255) null</td><td>&mdash;</td><td>Kota asal pengiriman, dasar hitung ongkir.</td></tr>
+                    <tr><td class="c">state</td><td class="t">varchar(255) null</td><td>&mdash;</td><td>Provinsi asal pengiriman.</td></tr>
+                    <tr><td class="c">postal_code</td><td class="t">varchar(255) null</td><td>&mdash;</td><td>Kode pos asal pengiriman.</td></tr>
+                    <tr><td class="c">status</td><td class="t">enum(pending, active, suspended, rejected)</td><td>&mdash;</td><td>Status pengajuan dan operasional toko.</td></tr>
+                    <tr><td class="c">verified_at</td><td class="t">timestamp null</td><td>&mdash;</td><td>Waktu toko diverifikasi admin.</td></tr>
+                    <tr><td class="c">rating_average</td><td class="t">decimal(3,2)</td><td>&mdash;</td><td>Cache rata-rata rating toko agar tidak dihitung ulang.</td></tr>
+                    <tr><td class="c">rating_count</td><td class="t">int unsigned</td><td>&mdash;</td><td>Jumlah penilaian yang masuk.</td></tr>
+                    <tr><td class="c">created_at</td><td class="t">timestamp null</td><td>&mdash;</td><td>Waktu toko didaftarkan.</td></tr>
+                    <tr><td class="c">updated_at</td><td class="t">timestamp null</td><td>&mdash;</td><td>Waktu data toko terakhir diubah.</td></tr>
+                    <tr><td class="c">deleted_at</td><td class="t">timestamp null</td><td><i class="b sd">SOFT</i></td><td>Penanda soft delete agar riwayat order lama tetap utuh.</td></tr>
+                </tbody>
+            </table>
+            </div>
+        </div>
+
+        <div class="dt">
+            <div class="dt-head">
+                <h4>categories</h4>
+                <p>Kategori bertingkat, contoh Pakaian &gt; Kaos.</p>
+            </div>
+            <div class="dt-scroll">
+            <table class="doc">
+                <thead><tr><th>Nama Kolom</th><th>Tipe Data</th><th>PK / FK</th><th>Fungsi Kolom</th></tr></thead>
+                <tbody>
+                    <tr><td class="c">id</td><td class="t">bigint unsigned</td><td><i class="b pk">PK</i></td><td>Identitas unik tiap kategori.</td></tr>
+                    <tr><td class="c">parent_id</td><td class="t">bigint unsigned null</td><td><i class="b fk">FK</i> &rarr; <b>categories.id</b> <span class="rel">relasi ke diri sendiri</span> <i class="b cas">cascade</i></td><td>Kategori induk. Null berarti kategori tingkat teratas.</td></tr>
+                    <tr><td class="c">name</td><td class="t">varchar(255)</td><td>&mdash;</td><td>Nama kategori.</td></tr>
+                    <tr><td class="c">slug</td><td class="t">varchar(255)</td><td><i class="b uq">UQ</i></td><td>Versi URL nama kategori.</td></tr>
+                    <tr><td class="c">type</td><td class="t">enum(clothing, footwear, accessories)</td><td>&mdash;</td><td>Golongan besar produk dalam kategori ini.</td></tr>
+                    <tr><td class="c">size_type</td><td class="t">enum(top, bottom, footwear, none)</td><td>&mdash;</td><td>Standar ukuran yang berlaku. <code>none</code> untuk aksesori tanpa ukuran.</td></tr>
+                    <tr><td class="c">description</td><td class="t">varchar(255) null</td><td>&mdash;</td><td>Keterangan singkat kategori.</td></tr>
+                    <tr><td class="c">icon</td><td class="t">varchar(255) null</td><td>&mdash;</td><td>Ikon kategori untuk tampilan menu.</td></tr>
+                    <tr><td class="c">sort_order</td><td class="t">smallint unsigned</td><td>&mdash;</td><td>Urutan tampil kategori.</td></tr>
+                    <tr><td class="c">is_active</td><td class="t">tinyint(1)</td><td>&mdash;</td><td>Menyembunyikan kategori tanpa menghapusnya.</td></tr>
+                    <tr><td class="c">created_at</td><td class="t">timestamp null</td><td>&mdash;</td><td>Waktu kategori dibuat.</td></tr>
+                    <tr><td class="c">updated_at</td><td class="t">timestamp null</td><td>&mdash;</td><td>Waktu kategori terakhir diubah.</td></tr>
+                </tbody>
+            </table>
+            </div>
+        </div>
+
+        <div class="dt">
+            <div class="dt-head">
+                <h4>brands</h4>
+                <p>Daftar merek produk untuk filter katalog.</p>
+            </div>
+            <div class="dt-scroll">
+            <table class="doc">
+                <thead><tr><th>Nama Kolom</th><th>Tipe Data</th><th>PK / FK</th><th>Fungsi Kolom</th></tr></thead>
+                <tbody>
+                    <tr><td class="c">id</td><td class="t">bigint unsigned</td><td><i class="b pk">PK</i></td><td>Identitas unik tiap merek.</td></tr>
+                    <tr><td class="c">name</td><td class="t">varchar(255)</td><td>&mdash;</td><td>Nama merek.</td></tr>
+                    <tr><td class="c">slug</td><td class="t">varchar(255)</td><td><i class="b uq">UQ</i></td><td>Versi URL nama merek.</td></tr>
+                    <tr><td class="c">logo</td><td class="t">varchar(255) null</td><td>&mdash;</td><td>Path gambar logo merek.</td></tr>
+                    <tr><td class="c">description</td><td class="t">text null</td><td>&mdash;</td><td>Keterangan tentang merek.</td></tr>
+                    <tr><td class="c">is_active</td><td class="t">tinyint(1)</td><td>&mdash;</td><td>Menyembunyikan merek dari filter tanpa menghapusnya.</td></tr>
+                    <tr><td class="c">created_at</td><td class="t">timestamp null</td><td>&mdash;</td><td>Waktu merek dibuat.</td></tr>
+                    <tr><td class="c">updated_at</td><td class="t">timestamp null</td><td>&mdash;</td><td>Waktu merek terakhir diubah.</td></tr>
+                </tbody>
+            </table>
+            </div>
+        </div>
+
+        <div class="dt">
+            <div class="dt-head">
+                <h4>products</h4>
+                <p>Produk milik toko, terhubung ke satu size chart yang wajib diikuti variannya.</p>
+            </div>
+            <div class="dt-scroll">
+            <table class="doc">
+                <thead><tr><th>Nama Kolom</th><th>Tipe Data</th><th>PK / FK</th><th>Fungsi Kolom</th></tr></thead>
+                <tbody>
+                    <tr><td class="c">id</td><td class="t">bigint unsigned</td><td><i class="b pk">PK</i></td><td>Identitas unik tiap produk.</td></tr>
+                    <tr><td class="c">store_id</td><td class="t">bigint unsigned</td><td><i class="b fk">FK</i> &rarr; <b>stores.id</b> <i class="b cas">cascade</i></td><td>Toko penjual produk.</td></tr>
+                    <tr><td class="c">category_id</td><td class="t">bigint unsigned</td><td><i class="b fk">FK</i> &rarr; <b>categories.id</b> <i class="b res">restrict</i></td><td>Kategori produk. Kategori terpakai tidak boleh dihapus.</td></tr>
+                    <tr><td class="c">brand_id</td><td class="t">bigint unsigned null</td><td><i class="b fk">FK</i> &rarr; <b>brands.id</b> <i class="b snl">set null</i></td><td>Merek produk. Boleh kosong bila tanpa merek.</td></tr>
+                    <tr><td class="c">size_chart_id</td><td class="t">bigint unsigned null</td><td><i class="b fk">FK</i> &rarr; <b>size_charts.id</b> <i class="b snl">set null</i></td><td>Standar ukuran yang dipakai. Null untuk aksesori tanpa ukuran.</td></tr>
+                    <tr><td class="c">name</td><td class="t">varchar(255)</td><td>&mdash;</td><td>Nama produk.</td></tr>
+                    <tr><td class="c">slug</td><td class="t">varchar(255)</td><td><i class="b uq">UQ</i></td><td>Versi URL nama produk.</td></tr>
+                    <tr><td class="c">description</td><td class="t">text null</td><td>&mdash;</td><td>Deskripsi lengkap produk.</td></tr>
+                    <tr><td class="c">target_gender</td><td class="t">enum(male, female, unisex)</td><td>&mdash;</td><td>Sasaran jenis kelamin produk.</td></tr>
+                    <tr><td class="c">base_price</td><td class="t">decimal(12,2)</td><td>&mdash;</td><td>Harga tampilan di katalog. Harga aslinya per varian.</td></tr>
+                    <tr><td class="c">weight_gram</td><td class="t">int unsigned</td><td>&mdash;</td><td>Berat produk dalam gram untuk hitung ongkir.</td></tr>
+                    <tr><td class="c">status</td><td class="t">enum(draft, pending_review, active, inactive, rejected)</td><td>&mdash;</td><td>Tahap publikasi produk termasuk proses review admin.</td></tr>
+                    <tr><td class="c">rating_average</td><td class="t">decimal(3,2)</td><td>&mdash;</td><td>Cache rata-rata rating produk.</td></tr>
+                    <tr><td class="c">rating_count</td><td class="t">int unsigned</td><td>&mdash;</td><td>Jumlah ulasan yang masuk.</td></tr>
+                    <tr><td class="c">sold_count</td><td class="t">int unsigned</td><td>&mdash;</td><td>Jumlah produk terjual, dipakai untuk urutan terlaris.</td></tr>
+                    <tr><td class="c">view_count</td><td class="t">int unsigned</td><td>&mdash;</td><td>Jumlah kunjungan halaman produk.</td></tr>
+                    <tr><td class="c">is_featured</td><td class="t">tinyint(1)</td><td>&mdash;</td><td>Menandai produk unggulan di halaman depan.</td></tr>
+                    <tr><td class="c">published_at</td><td class="t">timestamp null</td><td>&mdash;</td><td>Waktu produk mulai tayang.</td></tr>
+                    <tr><td class="c">created_at</td><td class="t">timestamp null</td><td>&mdash;</td><td>Waktu produk dibuat.</td></tr>
+                    <tr><td class="c">updated_at</td><td class="t">timestamp null</td><td>&mdash;</td><td>Waktu produk terakhir diubah.</td></tr>
+                    <tr><td class="c">deleted_at</td><td class="t">timestamp null</td><td><i class="b sd">SOFT</i></td><td>Penanda soft delete agar riwayat order lama tetap terbaca.</td></tr>
+                </tbody>
+            </table>
+            </div>
+            <p class="dt-note"><i class="b ix">IDX</i> <code>status + category_id</code> &mdash; mempercepat penelusuran katalog.</p>
+        </div>
+
+        <div class="dt">
+            <div class="dt-head">
+                <h4>product_variants</h4>
+                <p>Kombinasi ukuran + warna yang benar-benar dijual dan punya stok.</p>
+            </div>
+            <div class="dt-scroll">
+            <table class="doc">
+                <thead><tr><th>Nama Kolom</th><th>Tipe Data</th><th>PK / FK</th><th>Fungsi Kolom</th></tr></thead>
+                <tbody>
+                    <tr><td class="c">id</td><td class="t">bigint unsigned</td><td><i class="b pk">PK</i></td><td>Identitas unik tiap varian.</td></tr>
+                    <tr><td class="c">product_id</td><td class="t">bigint unsigned</td><td><i class="b fk">FK</i> &rarr; <b>products.id</b> <i class="b cas">cascade</i></td><td>Produk induk varian ini.</td></tr>
+                    <tr><td class="c">size_chart_entry_id</td><td class="t">bigint unsigned null</td><td><i class="b fk">FK</i> &rarr; <b>size_chart_entries.id</b> <i class="b snl">set null</i></td><td>Label ukuran resmi varian, bukan teks bebas dari seller.</td></tr>
+                    <tr><td class="c">sku</td><td class="t">varchar(255)</td><td><i class="b uq">UQ</i></td><td>Kode stok unik untuk pencatatan gudang.</td></tr>
+                    <tr><td class="c">color_name</td><td class="t">varchar(255) null</td><td>&mdash;</td><td>Nama warna varian.</td></tr>
+                    <tr><td class="c">color_hex</td><td class="t">varchar(7) null</td><td>&mdash;</td><td>Kode warna hex untuk pilihan warna di halaman produk.</td></tr>
+                    <tr><td class="c">price</td><td class="t">decimal(12,2)</td><td>&mdash;</td><td>Harga jual sebenarnya varian ini.</td></tr>
+                    <tr><td class="c">compare_at_price</td><td class="t">decimal(12,2) null</td><td>&mdash;</td><td>Harga sebelum diskon untuk ditampilkan tercoret.</td></tr>
+                    <tr><td class="c">stock</td><td class="t">int unsigned</td><td>&mdash;</td><td>Jumlah stok tersedia.</td></tr>
+                    <tr><td class="c">weight_gram</td><td class="t">int unsigned null</td><td>&mdash;</td><td>Berat khusus varian. Null berarti ikut berat produk.</td></tr>
+                    <tr><td class="c">image</td><td class="t">varchar(255) null</td><td>&mdash;</td><td>Gambar khusus varian, biasanya per warna.</td></tr>
+                    <tr><td class="c">is_active</td><td class="t">tinyint(1)</td><td>&mdash;</td><td>Menyembunyikan varian dari pilihan pembeli.</td></tr>
+                    <tr><td class="c">created_at</td><td class="t">timestamp null</td><td>&mdash;</td><td>Waktu varian dibuat.</td></tr>
+                    <tr><td class="c">updated_at</td><td class="t">timestamp null</td><td>&mdash;</td><td>Waktu varian terakhir diubah.</td></tr>
+                </tbody>
+            </table>
+            </div>
+            <p class="dt-note"><i class="b uq">UQ</i> <code>product_id + size_chart_entry_id + color_name</code> &mdash; kombinasi varian tidak boleh kembar.</p>
+        </div>
+
+        <div class="dt">
+            <div class="dt-head">
+                <h4>product_images</h4>
+                <p>Galeri gambar produk.</p>
+            </div>
+            <div class="dt-scroll">
+            <table class="doc">
+                <thead><tr><th>Nama Kolom</th><th>Tipe Data</th><th>PK / FK</th><th>Fungsi Kolom</th></tr></thead>
+                <tbody>
+                    <tr><td class="c">id</td><td class="t">bigint unsigned</td><td><i class="b pk">PK</i></td><td>Identitas unik tiap gambar.</td></tr>
+                    <tr><td class="c">product_id</td><td class="t">bigint unsigned</td><td><i class="b fk">FK</i> &rarr; <b>products.id</b> <i class="b cas">cascade</i></td><td>Produk pemilik gambar.</td></tr>
+                    <tr><td class="c">path</td><td class="t">varchar(255)</td><td>&mdash;</td><td>Lokasi file gambar di penyimpanan.</td></tr>
+                    <tr><td class="c">alt_text</td><td class="t">varchar(255) null</td><td>&mdash;</td><td>Teks pengganti gambar untuk aksesibilitas dan SEO.</td></tr>
+                    <tr><td class="c">sort_order</td><td class="t">smallint unsigned</td><td>&mdash;</td><td>Urutan tampil gambar dalam galeri.</td></tr>
+                    <tr><td class="c">is_primary</td><td class="t">tinyint(1)</td><td>&mdash;</td><td>Menandai gambar utama yang tampil di katalog.</td></tr>
+                    <tr><td class="c">created_at</td><td class="t">timestamp null</td><td>&mdash;</td><td>Waktu gambar diunggah.</td></tr>
+                    <tr><td class="c">updated_at</td><td class="t">timestamp null</td><td>&mdash;</td><td>Waktu data gambar terakhir diubah.</td></tr>
+                </tbody>
+            </table>
+            </div>
+        </div>
+
+        <h3 class="dt-group trx"><span class="dot trx"></span> Transaksi, Promo &amp; Ulasan</h3>
+
+        <div class="dt">
+            <div class="dt-head">
+                <h4>carts</h4>
+                <p>Keranjang belanja. Satu user tepat satu keranjang.</p>
+            </div>
+            <div class="dt-scroll">
+            <table class="doc">
+                <thead><tr><th>Nama Kolom</th><th>Tipe Data</th><th>PK / FK</th><th>Fungsi Kolom</th></tr></thead>
+                <tbody>
+                    <tr><td class="c">id</td><td class="t">bigint unsigned</td><td><i class="b pk">PK</i></td><td>Identitas unik tiap keranjang.</td></tr>
+                    <tr><td class="c">user_id</td><td class="t">bigint unsigned</td><td><i class="b fk">FK</i> <i class="b uq">UQ</i> &rarr; <b>users.id</b> <i class="b cas">cascade</i></td><td>Pemilik keranjang. Unik, jadi satu user satu keranjang.</td></tr>
+                    <tr><td class="c">created_at</td><td class="t">timestamp null</td><td>&mdash;</td><td>Waktu keranjang dibuat.</td></tr>
+                    <tr><td class="c">updated_at</td><td class="t">timestamp null</td><td>&mdash;</td><td>Waktu isi keranjang terakhir berubah.</td></tr>
+                </tbody>
+            </table>
+            </div>
+        </div>
+
+        <div class="dt">
+            <div class="dt-head">
+                <h4>cart_items</h4>
+                <p>Isi keranjang, boleh campur dari beberapa toko sekaligus.</p>
+            </div>
+            <div class="dt-scroll">
+            <table class="doc">
+                <thead><tr><th>Nama Kolom</th><th>Tipe Data</th><th>PK / FK</th><th>Fungsi Kolom</th></tr></thead>
+                <tbody>
+                    <tr><td class="c">id</td><td class="t">bigint unsigned</td><td><i class="b pk">PK</i></td><td>Identitas unik tiap baris keranjang.</td></tr>
+                    <tr><td class="c">cart_id</td><td class="t">bigint unsigned</td><td><i class="b fk">FK</i> &rarr; <b>carts.id</b> <i class="b cas">cascade</i></td><td>Keranjang tempat barang ini berada.</td></tr>
+                    <tr><td class="c">product_variant_id</td><td class="t">bigint unsigned</td><td><i class="b fk">FK</i> &rarr; <b>product_variants.id</b> <i class="b cas">cascade</i></td><td>Varian produk yang dipilih, lengkap dengan ukuran dan warnanya.</td></tr>
+                    <tr><td class="c">quantity</td><td class="t">int unsigned</td><td>&mdash;</td><td>Jumlah barang yang dimasukkan. Default 1.</td></tr>
+                    <tr><td class="c">note</td><td class="t">text null</td><td>&mdash;</td><td>Catatan pembeli untuk seller.</td></tr>
+                    <tr><td class="c">created_at</td><td class="t">timestamp null</td><td>&mdash;</td><td>Waktu barang dimasukkan ke keranjang.</td></tr>
+                    <tr><td class="c">updated_at</td><td class="t">timestamp null</td><td>&mdash;</td><td>Waktu jumlah atau catatan terakhir diubah.</td></tr>
+                </tbody>
+            </table>
+            </div>
+            <p class="dt-note"><i class="b uq">UQ</i> <code>cart_id + product_variant_id</code> &mdash; varian yang sama cukup satu baris, tinggal tambah quantity.</p>
+        </div>
+
+        <div class="dt">
+            <div class="dt-head">
+                <h4>wishlists</h4>
+                <p>Daftar produk favorit pengguna.</p>
+            </div>
+            <div class="dt-scroll">
+            <table class="doc">
+                <thead><tr><th>Nama Kolom</th><th>Tipe Data</th><th>PK / FK</th><th>Fungsi Kolom</th></tr></thead>
+                <tbody>
+                    <tr><td class="c">id</td><td class="t">bigint unsigned</td><td><i class="b pk">PK</i></td><td>Identitas unik tiap baris favorit.</td></tr>
+                    <tr><td class="c">user_id</td><td class="t">bigint unsigned</td><td><i class="b fk">FK</i> &rarr; <b>users.id</b> <i class="b cas">cascade</i></td><td>Pengguna pemilik daftar favorit.</td></tr>
+                    <tr><td class="c">product_id</td><td class="t">bigint unsigned</td><td><i class="b fk">FK</i> &rarr; <b>products.id</b> <i class="b cas">cascade</i></td><td>Produk yang disimpan sebagai favorit.</td></tr>
+                    <tr><td class="c">created_at</td><td class="t">timestamp null</td><td>&mdash;</td><td>Waktu produk difavoritkan.</td></tr>
+                    <tr><td class="c">updated_at</td><td class="t">timestamp null</td><td>&mdash;</td><td>Waktu baris terakhir diubah.</td></tr>
+                </tbody>
+            </table>
+            </div>
+            <p class="dt-note"><i class="b uq">UQ</i> <code>user_id + product_id</code> &mdash; satu produk hanya sekali difavoritkan.</p>
+        </div>
+
+        <div class="dt">
+            <div class="dt-head">
+                <h4>orders</h4>
+                <p>Order level pembeli: satu checkout, satu pembayaran. Data alamat sengaja disalin, bukan direferensi.</p>
+            </div>
+            <div class="dt-scroll">
+            <table class="doc">
+                <thead><tr><th>Nama Kolom</th><th>Tipe Data</th><th>PK / FK</th><th>Fungsi Kolom</th></tr></thead>
+                <tbody>
+                    <tr><td class="c">id</td><td class="t">bigint unsigned</td><td><i class="b pk">PK</i></td><td>Identitas unik tiap order.</td></tr>
+                    <tr><td class="c">user_id</td><td class="t">bigint unsigned</td><td><i class="b fk">FK</i> &rarr; <b>users.id</b> <i class="b res">restrict</i></td><td>Pembeli pemilik order. Akun bertransaksi tidak boleh dihapus.</td></tr>
+                    <tr><td class="c">order_number</td><td class="t">varchar(255)</td><td><i class="b uq">UQ</i></td><td>Nomor order yang ditunjukkan ke pembeli.</td></tr>
+                    <tr><td class="c">coupon_id</td><td class="t">bigint unsigned null</td><td><i class="b fk">FK</i> &rarr; <b>coupons.id</b> <i class="b snl">set null</i></td><td>Kupon yang dipakai pada order ini.</td></tr>
+                    <tr><td class="c">recipient_name</td><td class="t">varchar(255)</td><td><span class="rel">salinan alamat</span></td><td>Nama penerima saat order dibuat.</td></tr>
+                    <tr><td class="c">recipient_phone</td><td class="t">varchar(255)</td><td><span class="rel">salinan alamat</span></td><td>Telepon penerima saat order dibuat.</td></tr>
+                    <tr><td class="c">shipping_street</td><td class="t">text</td><td><span class="rel">salinan alamat</span></td><td>Alamat jalan tujuan pengiriman.</td></tr>
+                    <tr><td class="c">shipping_city</td><td class="t">varchar(255)</td><td><span class="rel">salinan alamat</span></td><td>Kota tujuan pengiriman.</td></tr>
+                    <tr><td class="c">shipping_state</td><td class="t">varchar(255)</td><td><span class="rel">salinan alamat</span></td><td>Provinsi tujuan pengiriman.</td></tr>
+                    <tr><td class="c">shipping_postal_code</td><td class="t">varchar(255)</td><td><span class="rel">salinan alamat</span></td><td>Kode pos tujuan pengiriman.</td></tr>
+                    <tr><td class="c">shipping_country</td><td class="t">varchar(255)</td><td><span class="rel">salinan alamat</span></td><td>Negara tujuan pengiriman.</td></tr>
+                    <tr><td class="c">subtotal</td><td class="t">decimal(14,2)</td><td>&mdash;</td><td>Total harga barang sebelum ongkir dan diskon.</td></tr>
+                    <tr><td class="c">shipping_total</td><td class="t">decimal(14,2)</td><td>&mdash;</td><td>Total ongkos kirim seluruh toko.</td></tr>
+                    <tr><td class="c">discount_total</td><td class="t">decimal(14,2)</td><td>&mdash;</td><td>Total potongan harga dari kupon.</td></tr>
+                    <tr><td class="c">grand_total</td><td class="t">decimal(14,2)</td><td>&mdash;</td><td>Jumlah akhir yang harus dibayar pembeli.</td></tr>
+                    <tr><td class="c">status</td><td class="t">enum(pending_payment, paid, processing, shipped, completed, cancelled, refunded)</td><td>&mdash;</td><td>Status keseluruhan order.</td></tr>
+                    <tr><td class="c">note</td><td class="t">text null</td><td>&mdash;</td><td>Catatan tambahan dari pembeli.</td></tr>
+                    <tr><td class="c">placed_at</td><td class="t">timestamp null</td><td>&mdash;</td><td>Waktu order resmi diajukan.</td></tr>
+                    <tr><td class="c">created_at</td><td class="t">timestamp null</td><td>&mdash;</td><td>Waktu baris order dibuat.</td></tr>
+                    <tr><td class="c">updated_at</td><td class="t">timestamp null</td><td>&mdash;</td><td>Waktu order terakhir diperbarui.</td></tr>
+                </tbody>
+            </table>
+            </div>
+        </div>
+
+        <div class="dt">
+            <div class="dt-head">
+                <h4>store_orders</h4>
+                <p>Pecahan order per toko. Inilah yang diproses seller.</p>
+            </div>
+            <div class="dt-scroll">
+            <table class="doc">
+                <thead><tr><th>Nama Kolom</th><th>Tipe Data</th><th>PK / FK</th><th>Fungsi Kolom</th></tr></thead>
+                <tbody>
+                    <tr><td class="c">id</td><td class="t">bigint unsigned</td><td><i class="b pk">PK</i></td><td>Identitas unik tiap order per toko.</td></tr>
+                    <tr><td class="c">order_id</td><td class="t">bigint unsigned</td><td><i class="b fk">FK</i> &rarr; <b>orders.id</b> <i class="b cas">cascade</i></td><td>Order induk milik pembeli.</td></tr>
+                    <tr><td class="c">store_id</td><td class="t">bigint unsigned</td><td><i class="b fk">FK</i> &rarr; <b>stores.id</b> <i class="b res">restrict</i></td><td>Toko yang harus memproses pesanan ini.</td></tr>
+                    <tr><td class="c">store_order_number</td><td class="t">varchar(255)</td><td><i class="b uq">UQ</i></td><td>Nomor pesanan versi toko.</td></tr>
+                    <tr><td class="c">subtotal</td><td class="t">decimal(14,2)</td><td>&mdash;</td><td>Total harga barang dari toko ini saja.</td></tr>
+                    <tr><td class="c">shipping_cost</td><td class="t">decimal(14,2)</td><td>&mdash;</td><td>Ongkos kirim khusus toko ini.</td></tr>
+                    <tr><td class="c">discount</td><td class="t">decimal(14,2)</td><td>&mdash;</td><td>Potongan harga yang jatuh ke toko ini.</td></tr>
+                    <tr><td class="c">total</td><td class="t">decimal(14,2)</td><td>&mdash;</td><td>Jumlah akhir bagian toko ini.</td></tr>
+                    <tr><td class="c">status</td><td class="t">enum(pending, processing, shipped, delivered, completed, cancelled, refunded)</td><td>&mdash;</td><td>Status pengerjaan pesanan di toko ini, jalan sendiri-sendiri.</td></tr>
+                    <tr><td class="c">note</td><td class="t">text null</td><td>&mdash;</td><td>Catatan antara pembeli dan toko.</td></tr>
+                    <tr><td class="c">created_at</td><td class="t">timestamp null</td><td>&mdash;</td><td>Waktu pecahan order dibuat.</td></tr>
+                    <tr><td class="c">updated_at</td><td class="t">timestamp null</td><td>&mdash;</td><td>Waktu status terakhir berubah.</td></tr>
+                </tbody>
+            </table>
+            </div>
+            <p class="dt-note"><i class="b uq">UQ</i> <code>order_id + store_id</code> &mdash; satu toko satu pecahan dalam satu order.</p>
+        </div>
+
+        <div class="dt">
+            <div class="dt-head">
+                <h4>order_items</h4>
+                <p>Rincian barang yang dibeli. Nilainya disalin saat checkout agar nota lama tidak berubah.</p>
+            </div>
+            <div class="dt-scroll">
+            <table class="doc">
+                <thead><tr><th>Nama Kolom</th><th>Tipe Data</th><th>PK / FK</th><th>Fungsi Kolom</th></tr></thead>
+                <tbody>
+                    <tr><td class="c">id</td><td class="t">bigint unsigned</td><td><i class="b pk">PK</i></td><td>Identitas unik tiap baris barang.</td></tr>
+                    <tr><td class="c">store_order_id</td><td class="t">bigint unsigned</td><td><i class="b fk">FK</i> &rarr; <b>store_orders.id</b> <i class="b cas">cascade</i></td><td>Pesanan toko tempat barang ini masuk.</td></tr>
+                    <tr><td class="c">product_id</td><td class="t">bigint unsigned null</td><td><i class="b fk">FK</i> &rarr; <b>products.id</b> <i class="b snl">set null</i></td><td>Tautan ke produk asli, boleh hilang tanpa merusak nota.</td></tr>
+                    <tr><td class="c">product_variant_id</td><td class="t">bigint unsigned null</td><td><i class="b fk">FK</i> &rarr; <b>product_variants.id</b> <i class="b snl">set null</i></td><td>Tautan ke varian asli yang dibeli.</td></tr>
+                    <tr><td class="c">product_name</td><td class="t">varchar(255)</td><td><span class="rel">salinan</span></td><td>Nama produk saat dibeli.</td></tr>
+                    <tr><td class="c">size_label</td><td class="t">varchar(20) null</td><td><span class="rel">salinan</span></td><td>Ukuran yang dibeli, contoh XL.</td></tr>
+                    <tr><td class="c">color_name</td><td class="t">varchar(255) null</td><td><span class="rel">salinan</span></td><td>Warna yang dibeli.</td></tr>
+                    <tr><td class="c">unit_price</td><td class="t">decimal(12,2)</td><td><span class="rel">salinan</span></td><td>Harga satuan saat transaksi terjadi.</td></tr>
+                    <tr><td class="c">quantity</td><td class="t">int unsigned</td><td>&mdash;</td><td>Jumlah barang yang dibeli.</td></tr>
+                    <tr><td class="c">subtotal</td><td class="t">decimal(14,2)</td><td>&mdash;</td><td>Harga satuan dikali jumlah.</td></tr>
+                    <tr><td class="c">recommended_size_label</td><td class="t">varchar(20) null</td><td>&mdash;</td><td>Ukuran saran FitMate saat itu, untuk mengukur akurasi rekomendasi.</td></tr>
+                    <tr><td class="c">created_at</td><td class="t">timestamp null</td><td>&mdash;</td><td>Waktu baris dibuat.</td></tr>
+                    <tr><td class="c">updated_at</td><td class="t">timestamp null</td><td>&mdash;</td><td>Waktu baris terakhir diubah.</td></tr>
+                </tbody>
+            </table>
+            </div>
+        </div>
+
+        <div class="dt">
+            <div class="dt-head">
+                <h4>payments</h4>
+                <p>Pembayaran menempel di order pembeli, bukan per toko.</p>
+            </div>
+            <div class="dt-scroll">
+            <table class="doc">
+                <thead><tr><th>Nama Kolom</th><th>Tipe Data</th><th>PK / FK</th><th>Fungsi Kolom</th></tr></thead>
+                <tbody>
+                    <tr><td class="c">id</td><td class="t">bigint unsigned</td><td><i class="b pk">PK</i></td><td>Identitas unik tiap pembayaran.</td></tr>
+                    <tr><td class="c">order_id</td><td class="t">bigint unsigned</td><td><i class="b fk">FK</i> &rarr; <b>orders.id</b> <i class="b cas">cascade</i></td><td>Order yang sedang dibayar.</td></tr>
+                    <tr><td class="c">method</td><td class="t">enum(bank_transfer, virtual_account, ewallet, credit_card, cod)</td><td>&mdash;</td><td>Cara pembayaran yang dipilih pembeli.</td></tr>
+                    <tr><td class="c">provider</td><td class="t">varchar(255) null</td><td>&mdash;</td><td>Penyedia payment gateway, contoh midtrans atau xendit.</td></tr>
+                    <tr><td class="c">reference</td><td class="t">varchar(255) null <i class="b ix">IDX</i></td><td>&mdash;</td><td>Nomor transaksi dari provider untuk pencocokan.</td></tr>
+                    <tr><td class="c">amount</td><td class="t">decimal(14,2)</td><td>&mdash;</td><td>Nominal yang ditagihkan.</td></tr>
+                    <tr><td class="c">status</td><td class="t">enum(pending, paid, failed, expired, refunded)</td><td>&mdash;</td><td>Status pembayaran.</td></tr>
+                    <tr><td class="c">paid_at</td><td class="t">timestamp null</td><td>&mdash;</td><td>Waktu pembayaran berhasil.</td></tr>
+                    <tr><td class="c">expires_at</td><td class="t">timestamp null</td><td>&mdash;</td><td>Batas waktu pembayaran sebelum kedaluwarsa.</td></tr>
+                    <tr><td class="c">payload</td><td class="t">json null</td><td>&mdash;</td><td>Respon mentah dari provider, disimpan untuk penelusuran masalah.</td></tr>
+                    <tr><td class="c">created_at</td><td class="t">timestamp null</td><td>&mdash;</td><td>Waktu tagihan dibuat.</td></tr>
+                    <tr><td class="c">updated_at</td><td class="t">timestamp null</td><td>&mdash;</td><td>Waktu status terakhir berubah.</td></tr>
+                </tbody>
+            </table>
+            </div>
+        </div>
+
+        <div class="dt">
+            <div class="dt-head">
+                <h4>shipments</h4>
+                <p>Pengiriman per toko, karena tiap toko punya resi sendiri.</p>
+            </div>
+            <div class="dt-scroll">
+            <table class="doc">
+                <thead><tr><th>Nama Kolom</th><th>Tipe Data</th><th>PK / FK</th><th>Fungsi Kolom</th></tr></thead>
+                <tbody>
+                    <tr><td class="c">id</td><td class="t">bigint unsigned</td><td><i class="b pk">PK</i></td><td>Identitas unik tiap pengiriman.</td></tr>
+                    <tr><td class="c">store_order_id</td><td class="t">bigint unsigned</td><td><i class="b fk">FK</i> &rarr; <b>store_orders.id</b> <i class="b cas">cascade</i></td><td>Pesanan toko yang dikirim.</td></tr>
+                    <tr><td class="c">courier</td><td class="t">varchar(255)</td><td>&mdash;</td><td>Jasa kurir, contoh jne, jnt, sicepat.</td></tr>
+                    <tr><td class="c">service</td><td class="t">varchar(255) null</td><td>&mdash;</td><td>Layanan kurir, contoh reg, yes, cargo.</td></tr>
+                    <tr><td class="c">tracking_number</td><td class="t">varchar(255) null <i class="b ix">IDX</i></td><td>&mdash;</td><td>Nomor resi untuk lacak paket.</td></tr>
+                    <tr><td class="c">cost</td><td class="t">decimal(12,2)</td><td>&mdash;</td><td>Biaya kirim yang dibebankan.</td></tr>
+                    <tr><td class="c">weight_gram</td><td class="t">int unsigned</td><td>&mdash;</td><td>Berat total paket dalam gram.</td></tr>
+                    <tr><td class="c">status</td><td class="t">enum(pending, picked_up, in_transit, delivered, failed, returned)</td><td>&mdash;</td><td>Posisi paket saat ini.</td></tr>
+                    <tr><td class="c">shipped_at</td><td class="t">timestamp null</td><td>&mdash;</td><td>Waktu paket diserahkan ke kurir.</td></tr>
+                    <tr><td class="c">delivered_at</td><td class="t">timestamp null</td><td>&mdash;</td><td>Waktu paket sampai ke penerima.</td></tr>
+                    <tr><td class="c">created_at</td><td class="t">timestamp null</td><td>&mdash;</td><td>Waktu data pengiriman dibuat.</td></tr>
+                    <tr><td class="c">updated_at</td><td class="t">timestamp null</td><td>&mdash;</td><td>Waktu status terakhir diperbarui.</td></tr>
+                </tbody>
+            </table>
+            </div>
+        </div>
+
+        <div class="dt">
+            <div class="dt-head">
+                <h4>product_reviews</h4>
+                <p>Ulasan produk berikut umpan balik kecocokan ukuran.</p>
+            </div>
+            <div class="dt-scroll">
+            <table class="doc">
+                <thead><tr><th>Nama Kolom</th><th>Tipe Data</th><th>PK / FK</th><th>Fungsi Kolom</th></tr></thead>
+                <tbody>
+                    <tr><td class="c">id</td><td class="t">bigint unsigned</td><td><i class="b pk">PK</i></td><td>Identitas unik tiap ulasan.</td></tr>
+                    <tr><td class="c">product_id</td><td class="t">bigint unsigned</td><td><i class="b fk">FK</i> &rarr; <b>products.id</b> <i class="b cas">cascade</i></td><td>Produk yang diulas.</td></tr>
+                    <tr><td class="c">user_id</td><td class="t">bigint unsigned</td><td><i class="b fk">FK</i> &rarr; <b>users.id</b> <i class="b cas">cascade</i></td><td>Penulis ulasan.</td></tr>
+                    <tr><td class="c">order_item_id</td><td class="t">bigint unsigned null</td><td><i class="b fk">FK</i> <i class="b uq">UQ</i> &rarr; <b>order_items.id</b> <i class="b snl">set null</i></td><td>Barang yang diulas. Unik, jadi satu pembelian satu ulasan.</td></tr>
+                    <tr><td class="c">rating</td><td class="t">tinyint unsigned</td><td>&mdash;</td><td>Nilai bintang 1 sampai 5.</td></tr>
+                    <tr><td class="c">comment</td><td class="t">text null</td><td>&mdash;</td><td>Isi komentar pembeli.</td></tr>
+                    <tr><td class="c">fit_feedback</td><td class="t">enum(too_small, slightly_small, true_to_size, slightly_large, too_large) null</td><td>&mdash;</td><td>Umpan balik ukuran, jadi bukti untuk mengoreksi standar FitMate.</td></tr>
+                    <tr><td class="c">size_purchased</td><td class="t">varchar(20) null</td><td>&mdash;</td><td>Ukuran yang dibeli menurut pengulas.</td></tr>
+                    <tr><td class="c">is_verified_purchase</td><td class="t">tinyint(1)</td><td>&mdash;</td><td>Menandai ulasan berasal dari pembelian nyata.</td></tr>
+                    <tr><td class="c">created_at</td><td class="t">timestamp null</td><td>&mdash;</td><td>Waktu ulasan dikirim.</td></tr>
+                    <tr><td class="c">updated_at</td><td class="t">timestamp null</td><td>&mdash;</td><td>Waktu ulasan terakhir diubah.</td></tr>
+                </tbody>
+            </table>
+            </div>
+        </div>
+
+        <div class="dt">
+            <div class="dt-head">
+                <h4>coupons</h4>
+                <p>Kupon diskon milik toko maupun milik FitMate.</p>
+            </div>
+            <div class="dt-scroll">
+            <table class="doc">
+                <thead><tr><th>Nama Kolom</th><th>Tipe Data</th><th>PK / FK</th><th>Fungsi Kolom</th></tr></thead>
+                <tbody>
+                    <tr><td class="c">id</td><td class="t">bigint unsigned</td><td><i class="b pk">PK</i></td><td>Identitas unik tiap kupon.</td></tr>
+                    <tr><td class="c">store_id</td><td class="t">bigint unsigned null</td><td><i class="b fk">FK</i> &rarr; <b>stores.id</b> <i class="b cas">cascade</i></td><td>Toko pemilik kupon. Null berarti kupon FitMate untuk semua toko.</td></tr>
+                    <tr><td class="c">code</td><td class="t">varchar(255)</td><td><i class="b uq">UQ</i></td><td>Kode yang diketik pembeli saat checkout.</td></tr>
+                    <tr><td class="c">name</td><td class="t">varchar(255)</td><td>&mdash;</td><td>Nama promo yang ditampilkan.</td></tr>
+                    <tr><td class="c">description</td><td class="t">varchar(255) null</td><td>&mdash;</td><td>Keterangan syarat dan ketentuan singkat.</td></tr>
+                    <tr><td class="c">type</td><td class="t">enum(percentage, fixed)</td><td>&mdash;</td><td>Jenis potongan: persen atau nominal tetap.</td></tr>
+                    <tr><td class="c">value</td><td class="t">decimal(12,2)</td><td>&mdash;</td><td>Besar potongan sesuai jenisnya.</td></tr>
+                    <tr><td class="c">min_purchase</td><td class="t">decimal(12,2)</td><td>&mdash;</td><td>Minimal belanja agar kupon bisa dipakai.</td></tr>
+                    <tr><td class="c">max_discount</td><td class="t">decimal(12,2) null</td><td>&mdash;</td><td>Batas maksimal potongan untuk kupon tipe persen.</td></tr>
+                    <tr><td class="c">usage_limit</td><td class="t">int unsigned null</td><td>&mdash;</td><td>Kuota pemakaian. Null berarti tanpa batas.</td></tr>
+                    <tr><td class="c">used_count</td><td class="t">int unsigned</td><td>&mdash;</td><td>Berapa kali kupon sudah terpakai.</td></tr>
+                    <tr><td class="c">starts_at</td><td class="t">timestamp null</td><td>&mdash;</td><td>Waktu kupon mulai berlaku.</td></tr>
+                    <tr><td class="c">expiry_date</td><td class="t">date</td><td>&mdash;</td><td>Tanggal kupon kedaluwarsa.</td></tr>
+                    <tr><td class="c">is_active</td><td class="t">tinyint(1)</td><td>&mdash;</td><td>Mematikan kupon sewaktu-waktu tanpa menghapusnya.</td></tr>
+                    <tr><td class="c">created_at</td><td class="t">timestamp null</td><td>&mdash;</td><td>Waktu kupon dibuat.</td></tr>
+                    <tr><td class="c">updated_at</td><td class="t">timestamp null</td><td>&mdash;</td><td>Waktu kupon terakhir diubah.</td></tr>
+                </tbody>
+            </table>
+            </div>
+        </div>
+
+        <div class="dt">
+            <div class="dt-head">
+                <h4>coupon_usages</h4>
+                <p>Riwayat pemakaian kupon, penahan agar tidak dipakai berulang.</p>
+            </div>
+            <div class="dt-scroll">
+            <table class="doc">
+                <thead><tr><th>Nama Kolom</th><th>Tipe Data</th><th>PK / FK</th><th>Fungsi Kolom</th></tr></thead>
+                <tbody>
+                    <tr><td class="c">id</td><td class="t">bigint unsigned</td><td><i class="b pk">PK</i></td><td>Identitas unik tiap catatan pemakaian.</td></tr>
+                    <tr><td class="c">coupon_id</td><td class="t">bigint unsigned</td><td><i class="b fk">FK</i> &rarr; <b>coupons.id</b> <i class="b cas">cascade</i></td><td>Kupon yang dipakai.</td></tr>
+                    <tr><td class="c">user_id</td><td class="t">bigint unsigned</td><td><i class="b fk">FK</i> &rarr; <b>users.id</b> <i class="b cas">cascade</i></td><td>Pengguna yang memakai kupon.</td></tr>
+                    <tr><td class="c">order_id</td><td class="t">bigint unsigned</td><td><i class="b fk">FK</i> &rarr; <b>orders.id</b> <i class="b cas">cascade</i></td><td>Order tempat kupon dipakai.</td></tr>
+                    <tr><td class="c">discount_amount</td><td class="t">decimal(14,2)</td><td>&mdash;</td><td>Nilai potongan yang benar-benar didapat.</td></tr>
+                    <tr><td class="c">used_at</td><td class="t">timestamp null</td><td>&mdash;</td><td>Waktu kupon dipakai.</td></tr>
+                    <tr><td class="c">created_at</td><td class="t">timestamp null</td><td>&mdash;</td><td>Waktu catatan dibuat.</td></tr>
+                    <tr><td class="c">updated_at</td><td class="t">timestamp null</td><td>&mdash;</td><td>Waktu catatan terakhir diubah.</td></tr>
+                </tbody>
+            </table>
+            </div>
+            <p class="dt-note"><i class="b uq">UQ</i> <code>coupon_id + order_id</code> &mdash; satu kupon hanya sekali per order.</p>
+        </div>
+
+        <div class="dt">
+            <div class="dt-head">
+                <h4>banner_promos</h4>
+                <p>Banner promosi. Tabel mandiri tanpa relasi ke tabel lain.</p>
+            </div>
+            <div class="dt-scroll">
+            <table class="doc">
+                <thead><tr><th>Nama Kolom</th><th>Tipe Data</th><th>PK / FK</th><th>Fungsi Kolom</th></tr></thead>
+                <tbody>
+                    <tr><td class="c">id</td><td class="t">bigint unsigned</td><td><i class="b pk">PK</i></td><td>Identitas unik tiap banner.</td></tr>
+                    <tr><td class="c">title</td><td class="t">varchar(255)</td><td>&mdash;</td><td>Judul utama banner.</td></tr>
+                    <tr><td class="c">subtitle</td><td class="t">varchar(255) null</td><td>&mdash;</td><td>Teks pendukung di bawah judul.</td></tr>
+                    <tr><td class="c">image</td><td class="t">varchar(255)</td><td>&mdash;</td><td>Path gambar banner.</td></tr>
+                    <tr><td class="c">link_url</td><td class="t">varchar(255) null</td><td>&mdash;</td><td>Tujuan saat banner diklik.</td></tr>
+                    <tr><td class="c">placement</td><td class="t">enum(home_hero, home_middle, category, promo_page)</td><td>&mdash;</td><td>Letak banner ditampilkan.</td></tr>
+                    <tr><td class="c">sort_order</td><td class="t">smallint unsigned</td><td>&mdash;</td><td>Urutan tampil bila ada beberapa banner.</td></tr>
+                    <tr><td class="c">starts_at</td><td class="t">timestamp null</td><td>&mdash;</td><td>Waktu mulai tayang.</td></tr>
+                    <tr><td class="c">ends_at</td><td class="t">timestamp null</td><td>&mdash;</td><td>Waktu berhenti tayang.</td></tr>
+                    <tr><td class="c">is_active</td><td class="t">tinyint(1)</td><td>&mdash;</td><td>Menyalakan atau mematikan banner.</td></tr>
+                    <tr><td class="c">created_at</td><td class="t">timestamp null</td><td>&mdash;</td><td>Waktu banner dibuat.</td></tr>
+                    <tr><td class="c">updated_at</td><td class="t">timestamp null</td><td>&mdash;</td><td>Waktu banner terakhir diubah.</td></tr>
+                </tbody>
+            </table>
+            </div>
+        </div>
+
+        <h3 class="dt-group sys"><span class="dot sys"></span> Tabel Sistem Laravel</h3>
+
+        <div class="dt">
+            <div class="dt-head">
+                <h4>cache</h4>
+                <p>Penyimpanan cache karena <code>CACHE_STORE</code> memakai database.</p>
+            </div>
+            <div class="dt-scroll">
+            <table class="doc">
+                <thead><tr><th>Nama Kolom</th><th>Tipe Data</th><th>PK / FK</th><th>Fungsi Kolom</th></tr></thead>
+                <tbody>
+                    <tr><td class="c">key</td><td class="t">varchar(255)</td><td><i class="b pk">PK</i></td><td>Nama kunci cache.</td></tr>
+                    <tr><td class="c">value</td><td class="t">mediumtext</td><td>&mdash;</td><td>Isi data yang disimpan.</td></tr>
+                    <tr><td class="c">expiration</td><td class="t">bigint <i class="b ix">IDX</i></td><td>&mdash;</td><td>Waktu kedaluwarsa dalam format unix timestamp.</td></tr>
+                </tbody>
+            </table>
+            </div>
+        </div>
+
+        <div class="dt">
+            <div class="dt-head">
+                <h4>cache_locks</h4>
+                <p>Kunci atomic agar satu proses tidak dijalankan ganda.</p>
+            </div>
+            <div class="dt-scroll">
+            <table class="doc">
+                <thead><tr><th>Nama Kolom</th><th>Tipe Data</th><th>PK / FK</th><th>Fungsi Kolom</th></tr></thead>
+                <tbody>
+                    <tr><td class="c">key</td><td class="t">varchar(255)</td><td><i class="b pk">PK</i></td><td>Nama kunci yang sedang dikunci.</td></tr>
+                    <tr><td class="c">owner</td><td class="t">varchar(255)</td><td>&mdash;</td><td>Penanda proses pemegang kunci.</td></tr>
+                    <tr><td class="c">expiration</td><td class="t">bigint <i class="b ix">IDX</i></td><td>&mdash;</td><td>Waktu kunci otomatis dilepas.</td></tr>
+                </tbody>
+            </table>
+            </div>
+        </div>
+
+        <div class="dt">
+            <div class="dt-head">
+                <h4>jobs</h4>
+                <p>Antrian pekerjaan latar belakang yang menunggu diproses worker.</p>
+            </div>
+            <div class="dt-scroll">
+            <table class="doc">
+                <thead><tr><th>Nama Kolom</th><th>Tipe Data</th><th>PK / FK</th><th>Fungsi Kolom</th></tr></thead>
+                <tbody>
+                    <tr><td class="c">id</td><td class="t">bigint unsigned</td><td><i class="b pk">PK</i></td><td>Identitas unik tiap job.</td></tr>
+                    <tr><td class="c">queue</td><td class="t">varchar(255) <i class="b ix">IDX</i></td><td>&mdash;</td><td>Nama antrian tempat job berada.</td></tr>
+                    <tr><td class="c">payload</td><td class="t">longtext</td><td>&mdash;</td><td>Isi pekerjaan yang akan dijalankan.</td></tr>
+                    <tr><td class="c">attempts</td><td class="t">smallint unsigned</td><td>&mdash;</td><td>Berapa kali job sudah dicoba.</td></tr>
+                    <tr><td class="c">reserved_at</td><td class="t">int unsigned null</td><td>&mdash;</td><td>Waktu job diambil worker.</td></tr>
+                    <tr><td class="c">available_at</td><td class="t">int unsigned</td><td>&mdash;</td><td>Waktu job boleh mulai dijalankan.</td></tr>
+                    <tr><td class="c">created_at</td><td class="t">int unsigned</td><td>&mdash;</td><td>Waktu job dimasukkan ke antrian.</td></tr>
+                </tbody>
+            </table>
+            </div>
+        </div>
+
+        <div class="dt">
+            <div class="dt-head">
+                <h4>job_batches</h4>
+                <p>Kelompok job yang dijalankan bersamaan dan dipantau sebagai satu kesatuan.</p>
+            </div>
+            <div class="dt-scroll">
+            <table class="doc">
+                <thead><tr><th>Nama Kolom</th><th>Tipe Data</th><th>PK / FK</th><th>Fungsi Kolom</th></tr></thead>
+                <tbody>
+                    <tr><td class="c">id</td><td class="t">varchar(255)</td><td><i class="b pk">PK</i></td><td>Identitas unik tiap batch.</td></tr>
+                    <tr><td class="c">name</td><td class="t">varchar(255)</td><td>&mdash;</td><td>Nama batch untuk pemantauan.</td></tr>
+                    <tr><td class="c">total_jobs</td><td class="t">int</td><td>&mdash;</td><td>Jumlah seluruh job dalam batch.</td></tr>
+                    <tr><td class="c">pending_jobs</td><td class="t">int</td><td>&mdash;</td><td>Job yang belum selesai.</td></tr>
+                    <tr><td class="c">failed_jobs</td><td class="t">int</td><td>&mdash;</td><td>Jumlah job yang gagal.</td></tr>
+                    <tr><td class="c">failed_job_ids</td><td class="t">longtext</td><td>&mdash;</td><td>Daftar ID job yang gagal.</td></tr>
+                    <tr><td class="c">options</td><td class="t">mediumtext null</td><td>&mdash;</td><td>Pengaturan tambahan batch.</td></tr>
+                    <tr><td class="c">cancelled_at</td><td class="t">int null</td><td>&mdash;</td><td>Waktu batch dibatalkan.</td></tr>
+                    <tr><td class="c">created_at</td><td class="t">int</td><td>&mdash;</td><td>Waktu batch dibuat.</td></tr>
+                    <tr><td class="c">finished_at</td><td class="t">int null</td><td>&mdash;</td><td>Waktu batch selesai.</td></tr>
+                </tbody>
+            </table>
+            </div>
+        </div>
+
+        <div class="dt">
+            <div class="dt-head">
+                <h4>failed_jobs</h4>
+                <p>Catatan job yang gagal beserta pesan errornya.</p>
+            </div>
+            <div class="dt-scroll">
+            <table class="doc">
+                <thead><tr><th>Nama Kolom</th><th>Tipe Data</th><th>PK / FK</th><th>Fungsi Kolom</th></tr></thead>
+                <tbody>
+                    <tr><td class="c">id</td><td class="t">bigint unsigned</td><td><i class="b pk">PK</i></td><td>Identitas unik tiap kegagalan.</td></tr>
+                    <tr><td class="c">uuid</td><td class="t">varchar(255)</td><td><i class="b uq">UQ</i></td><td>Kode unik job yang gagal.</td></tr>
+                    <tr><td class="c">connection</td><td class="t">varchar(255)</td><td>&mdash;</td><td>Koneksi queue yang dipakai.</td></tr>
+                    <tr><td class="c">queue</td><td class="t">varchar(255)</td><td>&mdash;</td><td>Nama antrian asal job.</td></tr>
+                    <tr><td class="c">payload</td><td class="t">longtext</td><td>&mdash;</td><td>Isi job saat gagal, bisa dijalankan ulang.</td></tr>
+                    <tr><td class="c">exception</td><td class="t">longtext</td><td>&mdash;</td><td>Pesan error lengkap penyebab kegagalan.</td></tr>
+                    <tr><td class="c">failed_at</td><td class="t">timestamp</td><td>&mdash;</td><td>Waktu job gagal, default waktu sekarang.</td></tr>
+                </tbody>
+            </table>
+            </div>
+            <p class="dt-note"><i class="b ix">IDX</i> <code>connection + queue + failed_at</code></p>
+        </div>
+
+    </section>
+
+    <!-- ============ CATATAN ============ -->
+    <section id="catatan">
+        <h2>Catatan Desain Penting</h2>
+        <div class="notes">
+            <div class="n">
+                <h4>Satu standar ukuran untuk semua toko</h4>
+                <p>Seller tidak membuat size chart sendiri. Mereka hanya memilih label yang sudah ada di <code>size_chart_entries</code>, sehingga 'XL' bernilai sama persis di seluruh marketplace.</p>
+            </div>
+            <div class="n">
+                <h4>Data transaksi disalin, bukan direferensi</h4>
+                <p>Alamat di <code>orders</code> dan detail produk di <code>order_items</code> disimpan sebagai salinan. Nota lama tetap benar walau produk dihapus atau harga berubah.</p>
+            </div>
+            <div class="n">
+                <h4>Satu bayar, banyak toko</h4>
+                <p><code>payments</code> menempel di <code>orders</code>, sedangkan <code>shipments</code> menempel di <code>store_orders</code>. User bayar sekali, tapi tiap toko punya resi dan status kirim sendiri.</p>
+            </div>
+            <div class="n">
+                <h4>Soft delete di tempat kritis</h4>
+                <p><code>stores</code> dan <code>products</code> memakai soft delete supaya riwayat order lama tidak kehilangan referensinya.</p>
+            </div>
+            <div class="n">
+                <h4>Kamus dimensi bisa tumbuh tanpa migration</h4>
+                <p>Dimensi ukur baru cukup ditambahkan sebagai baris di <code>body_measurements</code>. Semua tabel ukuran mengikutinya lewat foreign key.</p>
+            </div>
+            <div class="n">
+                <h4>Rekomendasi disimpan sebagai cache</h4>
+                <p><code>size_recommendations</code> menyimpan hasil hitung agar tidak dihitung ulang tiap kali produk dibuka, sekaligus jadi bahan analitik akurasi rekomendasi.</p>
+            </div>
+        </div>
+    </section>
+
+</main>
+
+<footer class="foot">
+    <div class="wrap">
+        <p>FitMate &mdash; dokumentasi skema database dari <code>database/migrations</code>.</p>
+    </div>
+</footer>
+
+</body>
+</html>
