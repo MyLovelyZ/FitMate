@@ -15,7 +15,7 @@
         </x-form.field>
 
         <x-form.field name="gender" label="Jenis Kelamin" hint="Dipakai untuk memilih tabel ukuran yang benar.">
-            <x-ui.select name="gender" placeholder="Pilih..." :options="['male' => 'Laki-laki', 'female' => 'Perempuan']" />
+            <x-ui.select name="gender" placeholder="Pilih..." :options="collect($genderOptions)->except('unisex')->all()" />
         </x-form.field>
 
         <x-form.field name="password" label="Kata Sandi" required hint="Minimal 8 karakter.">

@@ -19,6 +19,7 @@
             <x-ui.nav-link :href="route('admin.dashboard')" :active="request()->routeIs('admin.dashboard')">Ringkasan</x-ui.nav-link>
             <x-ui.nav-link :href="route('admin.size-charts.index')" :active="request()->routeIs('admin.size-charts.*')">Standar Ukuran</x-ui.nav-link>
             <x-ui.nav-link :href="route('admin.categories.index')" :active="request()->routeIs('admin.categories.*')">Kategori &amp; Brand</x-ui.nav-link>
+            <x-ui.nav-link :href="route('admin.moderation.index')" :active="request()->routeIs('admin.moderation.*')">Verifikasi</x-ui.nav-link>
         @else
             <x-ui.nav-link :href="route('seller.dashboard')" :active="request()->routeIs('seller.dashboard')">Ringkasan</x-ui.nav-link>
             <x-ui.nav-link :href="route('seller.products.index')" :active="request()->routeIs('seller.products.*')">Produk</x-ui.nav-link>

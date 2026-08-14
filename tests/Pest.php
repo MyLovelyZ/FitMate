@@ -1,5 +1,9 @@
 <?php
 
+use App\Enums\Gender;
+use App\Models\BodyMeasurement;
+use App\Models\User;
+use App\Models\UserBodyProfile;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
 
@@ -15,7 +19,7 @@ use Tests\TestCase;
 */
 
 pest()->extend(TestCase::class)
- // ->use(RefreshDatabase::class)
+    ->use(RefreshDatabase::class)
     ->in('Feature');
 
 /*
@@ -44,7 +48,28 @@ expect()->extend('toBeOne', function () {
 |
 */
 
-function something()
+/**
+ * Profil ukuran badan dengan angka yang sudah terisi.
+ *
+ * Kuncinya memakai `body_measurements.key`, jadi test membaca sama seperti
+ * bahasa domainnya: `['lingkar_dada' => 99]`. Butuh BodyMeasurementSeeder
+ * sudah dijalankan lebih dulu.
+ *
+ * @param  array<string, float>  $values
+ */
+function profileWith(array $values, Gender $gender = Gender::Male): UserBodyProfile
 {
-    // ..
+    $profile = UserBodyProfile::factory()
+        ->forGender($gender)
+        ->for(User::factory())
+        ->create();
+
+    foreach ($values as $key => $value) {
+        $profile->measurements()->create([
+            'body_measurement_id' => BodyMeasurement::where('key', $key)->value('id'),
+            'value' => $value,
+        ]);
+    }
+
+    return $profile->load('measurements');
 }

@@ -1,3 +1,8 @@
+@php
+    /** Jumlah item keranjang diambil sekali di sini, dipakai badge di dua tempat. */
+    $cartCount = auth()->check() ? (int) auth()->user()->cart?->items()->sum('quantity') : 0;
+@endphp
+
 <nav class="sticky top-0 z-40 border-b border-gray-200 bg-white" x-data="{ mobileOpen: false }">
     <div class="mx-auto flex h-16 max-w-7xl items-center gap-6 px-4 sm:px-6 lg:px-8">
         <a href="{{ route('home') }}" class="text-xl font-bold tracking-tight text-brand-600">FitMate</a>
@@ -14,8 +19,10 @@
         <div class="ml-auto flex items-center gap-2 lg:ml-0">
             <a href="{{ route('cart.index') }}" class="relative rounded-lg px-3 py-2 text-sm font-medium text-gray-600 hover:bg-gray-100">
                 Keranjang
-                {{-- TODO(BE-064): ganti angka statis dengan jumlah item keranjang asli. --}}
-                <span class="absolute -top-0.5 right-0 rounded-full bg-brand-600 px-1.5 text-xs font-semibold text-white">0</span>
+
+                @if ($cartCount > 0)
+                    <span class="absolute -top-0.5 right-0 rounded-full bg-brand-600 px-1.5 text-xs font-semibold text-white">{{ $cartCount }}</span>
+                @endif
             </a>
 
             @auth
@@ -29,7 +36,14 @@
                     <x-ui.dropdown-item :href="route('profile.edit')">Profil Saya</x-ui.dropdown-item>
                     <x-ui.dropdown-item :href="route('profile.body')">Ukuran Badan</x-ui.dropdown-item>
                     <x-ui.dropdown-item :href="route('orders.index')">Pesanan Saya</x-ui.dropdown-item>
-                    <x-ui.dropdown-item :href="route('seller.dashboard')">Dashboard Toko</x-ui.dropdown-item>
+
+                    @if (auth()->user()->isAdmin())
+                        <x-ui.dropdown-item :href="route('admin.dashboard')">Dashboard Admin</x-ui.dropdown-item>
+                    @endif
+
+                    <x-ui.dropdown-item :href="route('seller.dashboard')">
+                        {{ auth()->user()->store ? 'Dashboard Toko' : 'Buka Toko' }}
+                    </x-ui.dropdown-item>
 
                     <form action="{{ route('logout') }}" method="POST">
                         @csrf
