@@ -2,36 +2,59 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\User;
+use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Auth;
 
 class AuthController extends Controller
 {
-    public function Register(Request $request)
+    public function register(Request $request): RedirectResponse
     {
-        $validate = $request->validate([
+        $validated = $request->validate([
             'name' => 'required|string|max:255',
             'email' => 'required|string|email|max:255|unique:users',
             'phone_number' => 'nullable|string|max:20',
             'gender' => 'nullable|string|in:male,female',
             'password' => 'required|string|min:8|confirmed',
-            'password_confirmation' => 'required|string|min:8'
         ]);
 
-        $user = \App\Models\User::create([
-            'name' => $validate['name'],
-            'email' => $validate['email'],
-            'phone_number' => $validate['phone_number'] ?? null,
-            'gender' => $validate['gender'] ?? null,
-            'password' => $validate['password'],
-        ]);
+        $user = User::create($validated);
 
-        return response()->json([
-            'message' => 'User registered successfully',
-            'user' => $user
-        ], 201);
+        Auth::login($user);
+
+        $request->session()->regenerate();
+
+        return redirect()->route('home');
     }
-    public function Login(Request $request)
+
+    public function login(Request $request): RedirectResponse
     {
-        $credentials = $request->only('email', 'password');
+        $credentials = $request->validate([
+            'email' => 'required|string|email',
+            'password' => 'required|string',
+        ]);
+
+        $remember = $request->boolean('remember');
+
+        if (! Auth::attempt($credentials, $remember)) {
+            return back()->withErrors([
+                'email' => 'Email atau kata sandi salah.',
+            ])->onlyInput('email');
+        }
+
+        $request->session()->regenerate();
+
+        return redirect()->intended(route('home'));
+    }
+
+    public function logout(Request $request): RedirectResponse
+    {
+        Auth::logout();
+
+        $request->session()->invalidate();
+        $request->session()->regenerateToken();
+
+        return redirect()->route('login');
     }
 }
