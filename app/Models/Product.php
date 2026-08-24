@@ -6,17 +6,18 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\SoftDeletes;
 
-class Size extends Model
+class Product extends Model
 {
-    use HasFactory;
+    use HasFactory, SoftDeletes;
 
     protected $fillable = [
-        'category_type_id',
-        'size_type',
+        'category_id',
         'name',
-        'code',
-        'sort_order',
+        'slug',
+        'description',
+        'base_price',
         'is_active',
     ];
 
@@ -26,24 +27,19 @@ class Size extends Model
     protected function casts(): array
     {
         return [
-            'sort_order' => 'integer',
+            'base_price' => 'decimal:2',
             'is_active' => 'boolean',
         ];
     }
 
     // relationships
 
-    public function categoryType(): BelongsTo
+    public function category(): BelongsTo
     {
-        return $this->belongsTo(CategoryType::class);
+        return $this->belongsTo(Category::class);
     }
 
-    public function sizeGuides(): HasMany
-    {
-        return $this->hasMany(SizeGuide::class);
-    }
-
-    public function productVariants(): HasMany
+    public function variants(): HasMany
     {
         return $this->hasMany(ProductVariant::class);
     }

@@ -4,8 +4,9 @@
 @source '../../storage/framework/views/*.php';
 
 @theme {
-    --font-sans: 'Instrument Sans', ui-sans-serif, system-ui, sans-serif, 'Apple Color Emoji', 'Segoe UI Emoji',
+    --font-sans: 'Manrope', ui-sans-serif, system-ui, sans-serif, 'Apple Color Emoji', 'Segoe UI Emoji',
         'Segoe UI Symbol', 'Noto Color Emoji';
+    --font-display: 'DM Serif Display', Georgia, 'Times New Roman', serif;
 
     --color-brand-50: #eef2ff;
     --color-brand-100: #e0e7ff;
@@ -19,9 +20,35 @@
     --color-navy-second: #0A192F;
     --color-abu-first: #E5E7EB;
     --color-abu-second: #9CA3AF;
+
+    /* Palet Estética Archive — dipakai layout publik (navbar, home, footer). */
+    --color-bg: #f5f3ee;
+    --color-surface: #ffffff;
+    --color-ink: #17150f;
+    --color-muted: #6e6a61;
+    --color-line: rgba(23, 21, 15, 0.12);
+    --color-cream: #fbfaf7;
+    --color-sale: #a4432c;
+
+    /* Padding samping yang ikut lebar layar + tinggi header tetap, dipakai lewat
+       utility px-side / top-header / h-header. */
+    --spacing-side: clamp(20px, 5vw, 64px);
+    --spacing-header: 76px;
 }
 
 /* Menyembunyikan elemen Alpine (x-show, x-transition) sebelum Alpine selesai dimuat. */
 [x-cloak] {
     display: none !important;
+}
+
+@media (prefers-reduced-motion: reduce) {
+    html {
+        scroll-behavior: auto;
+    }
+
+    *,
+    *::before,
+    *::after {
+        transition-duration: 0.001ms !important;
+    }
 }

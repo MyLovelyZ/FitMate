@@ -4,19 +4,16 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
-use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 
-class Size extends Model
+class Color extends Model
 {
     use HasFactory;
 
     protected $fillable = [
-        'category_type_id',
-        'size_type',
         'name',
-        'code',
-        'sort_order',
+        'slug',
+        'hex_code',
         'is_active',
     ];
 
@@ -26,22 +23,11 @@ class Size extends Model
     protected function casts(): array
     {
         return [
-            'sort_order' => 'integer',
             'is_active' => 'boolean',
         ];
     }
 
     // relationships
-
-    public function categoryType(): BelongsTo
-    {
-        return $this->belongsTo(CategoryType::class);
-    }
-
-    public function sizeGuides(): HasMany
-    {
-        return $this->hasMany(SizeGuide::class);
-    }
 
     public function productVariants(): HasMany
     {
