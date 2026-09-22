@@ -34,7 +34,7 @@
 
     <header
         class="sticky top-0 z-100 border-b border-line bg-bg/92 backdrop-blur-[10px] transition-shadow duration-200"
-        x-bind:class="scrolled ? 'shadow-[0_1px_0_rgba(23,21,15,0.06)]' : 'shadow-none'"
+        x-bind:class="scrolled ? 'shadow-[0_1px_0_rgba(10,25,47,0.06)]' : 'shadow-none'"
     >
         <div class="mx-auto flex h-header items-center justify-between gap-6 px-side">
             <a
@@ -59,7 +59,8 @@
                     @foreach ($navLinks as $label => $isSale)
                         <li>
                             <a
-                                href="{{ route('home') }}#categories"
+                                href="{{ route('products.index') }}"
+                                wire:navigate
                                 class="relative py-1 text-[13.5px] font-medium after:absolute after:bottom-0 after:left-0 after:h-px after:w-0 after:bg-ink after:transition-[width] after:duration-250 after:content-[''] hover:after:w-full {{ $isSale ? 'text-sale' : '' }}"
                             >
                                 {{ $label }}
@@ -154,7 +155,8 @@
                 @foreach ($navLinks as $label => $isSale)
                     <li>
                         <a
-                            href="{{ route('home') }}#categories"
+                            href="{{ route('products.index') }}"
+                            wire:navigate
                             @class([
                                 'block border-b border-line py-3.5 text-base font-medium',
                                 'text-sale' => $isSale,
@@ -188,7 +190,7 @@
 
     <div
         x-cloak
-        class="fixed inset-0 top-header z-98 bg-[rgba(23,21,15,0.25)] transition-opacity duration-200 lg:hidden"
+        class="fixed inset-0 top-header z-98 bg-[rgba(10,25,47,0.25)] transition-opacity duration-200 lg:hidden"
         x-bind:class="open ? 'opacity-100 pointer-events-auto' : 'opacity-0 pointer-events-none'"
         x-on:click="open = false"
         aria-hidden="true"

@@ -7,6 +7,7 @@ use App\Models\Color;
 use App\Models\Product;
 use App\Models\ProductVariant;
 use App\Models\Size;
+use App\Models\Store;
 use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Database\Seeder;
 use Illuminate\Support\Str;
@@ -14,7 +15,8 @@ use Illuminate\Support\Str;
 class ProductSeeder extends Seeder
 {
     /**
-     * Katalog demo. Butuh CategorySeeder, SizeSeeder, dan ColorSeeder jalan duluan.
+     * Katalog demo. Butuh CategorySeeder, SizeSeeder, ColorSeeder, dan StoreSeeder
+     * jalan duluan.
      *
      * Varian sengaja dibentuk dari ukuran milik jenis kategori produknya sendiri,
      * bukan ukuran acak, supaya rekomendasi ukuran bisa langsung dicoba.
@@ -49,14 +51,27 @@ class ProductSeeder extends Seeder
             throw new \RuntimeException('ColorSeeder harus jalan sebelum ProductSeeder.');
         }
 
+        $stores = Store::where('status', 'active')->orderBy('id')->get();
+
+        if ($stores->isEmpty()) {
+            throw new \RuntimeException('StoreSeeder harus jalan sebelum ProductSeeder.');
+        }
+
+        $productNumber = 0;
+
         foreach (self::PRODUCTS as $categorySlug => $items) {
             $category = Category::with('categoryType')->where('slug', $categorySlug)->firstOrFail();
             $sizes = $this->sizesFor($category);
 
             foreach ($items as $index => [$name, $basePrice]) {
+                // Produk dibagi rata ke tiap toko supaya katalognya terlihat
+                // sebagai marketplace, bukan satu toko besar.
+                $store = $stores[$productNumber++ % $stores->count()];
+
                 $product = Product::updateOrCreate(
                     ['slug' => Str::slug($name)],
                     [
+                        'store_id' => $store->id,
                         'category_id' => $category->id,
                         'name' => $name,
                         'description' => $this->describe($name, $category->name),

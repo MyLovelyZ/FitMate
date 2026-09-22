@@ -4,6 +4,7 @@ namespace Database\Factories;
 
 use App\Models\Category;
 use App\Models\Product;
+use App\Models\Store;
 use Illuminate\Database\Eloquent\Factories\Factory;
 use Illuminate\Support\Str;
 
@@ -22,6 +23,7 @@ class ProductFactory extends Factory
         $name = fake()->unique()->words(3, true);
 
         return [
+            'store_id' => Store::factory(),
             'category_id' => Category::factory(),
             'name' => Str::title($name),
             'slug' => Str::slug($name),
