@@ -15,6 +15,14 @@ class SuperAdminMiddleware
      */
     public function handle(Request $request, Closure $next): Response
     {
-        return $next($request);
+        if (Auth::check() && in_array(Auth::user()->role, ['super_admin', 'superadmin'])) {
+            return $next($request);
+        }
+
+        if ($request->expectsJson()) {
+            return response()->json(['message' => 'Akses ditolak. Khusus Super Admin.'], 403);
+        }
+
+        return redirect('/')->with('error', 'Anda tidak memiliki akses ke Super Admin.');
     }
 }
