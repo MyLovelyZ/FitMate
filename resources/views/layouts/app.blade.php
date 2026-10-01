@@ -17,7 +17,7 @@
 
                 <nav aria-label="Footer">
                     <ul class="flex list-none flex-wrap justify-center gap-x-7 gap-y-5">
-                        <li><a class="text-[13px] text-muted hover:text-ink" href="{{ route('home') }}#categories">Collections</a></li>
+                        <li><a class="text-[13px] text-muted hover:text-ink" href="{{ route('products.index') }}" wire:navigate>Collections</a></li>
                         <li><a class="text-[13px] text-muted hover:text-ink" href="{{ route('home') }}#ethos">About</a></li>
                         <li><a class="text-[13px] text-muted hover:text-ink" href="{{ route('home') }}#ethos">FAQ</a></li>
                         <li><a class="text-[13px] text-muted hover:text-ink" href="{{ route('home') }}#ethos">Contact Us</a></li>

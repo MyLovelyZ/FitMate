@@ -15,6 +15,8 @@ use Database\Seeders\CategoryTypeSeeder;
 use Database\Seeders\ColorSeeder;
 use Database\Seeders\ProductSeeder;
 use Database\Seeders\SizeSeeder;
+use Database\Seeders\StoreSeeder;
+use Database\Seeders\UserSeeder;
 use Illuminate\Database\QueryException;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 
@@ -233,6 +235,8 @@ it('re-runs the catalogue seeders without duplicating products or variants', fun
     $this->seed(CategoryTypeSeeder::class);
     $this->seed(CategorySeeder::class);
     $this->seed(SizeSeeder::class);
+    $this->seed(UserSeeder::class);
+    $this->seed(StoreSeeder::class);
     $this->seed(ProductSeeder::class);
 
     $products = Product::count();
