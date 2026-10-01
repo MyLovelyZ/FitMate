@@ -14,15 +14,19 @@ class DatabaseSeeder extends Seeder
      */
     public function run(): void
     {
-        // Urutan penting: kategori, ukuran, dan warna dipakai seeder di bawahnya.
+        // Urutan penting. UserSeeder naik ke atas karena StoreSeeder butuh akun
+        // seller, dan ProductSeeder butuh toko sebagai pemilik produknya.
         $this->call([
             CategoryTypeSeeder::class,
             CategorySeeder::class,
             SizeSeeder::class,
             SizeGuideSeeder::class,
             ColorSeeder::class,
-            ProductSeeder::class,
             UserSeeder::class,
+            StoreSeeder::class,
+            ProductSeeder::class,
+            WalletSeeder::class,
+            MarketplaceOrderSeeder::class,
         ]);
     }
 }

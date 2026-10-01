@@ -63,4 +63,29 @@ class User extends Authenticatable
     {
         return $this->hasOne(UserBodyProfile::class)->where('is_default', true);
     }
+
+    public function store(): HasOne
+    {
+        return $this->hasOne(Store::class);
+    }
+
+    public function cart(): HasOne
+    {
+        return $this->hasOne(Cart::class);
+    }
+
+    public function orders(): HasMany
+    {
+        return $this->hasMany(Order::class);
+    }
+
+    public function wallet(): HasOne
+    {
+        return $this->hasOne(Wallet::class);
+    }
+
+    public function payoutAccounts(): HasMany
+    {
+        return $this->hasMany(PayoutAccount::class);
+    }
 }

@@ -42,7 +42,7 @@ new #[Title('Estética Archive')] class extends Component
     {{-- Hero --}}
     <section id="top" class="relative flex min-h-[78vh] items-end overflow-hidden">
         <div
-            class="absolute inset-0 bg-cover bg-center bg-[linear-gradient(180deg,rgba(23,21,15,0)_40%,rgba(23,21,15,0.55)_100%),linear-gradient(120deg,#d8d2c4,#b9b2a0_45%,#8f8a7c)]"
+            class="absolute inset-0 bg-cover bg-center bg-[linear-gradient(180deg,rgba(10,25,47,0)_40%,rgba(10,25,47,0.55)_100%),linear-gradient(120deg,#d8d2c4,#b9b2a0_45%,#8f8a7c)]"
             aria-hidden="true"
         ></div>
 
@@ -51,12 +51,12 @@ new #[Title('Estética Archive')] class extends Component
                 Your Daily<br>Go-To Style Mate
             </h1>
 
-            <p class="mt-[clamp(16px,3vw,24px)] max-w-[30ch] rounded border border-[rgba(251,250,247,0.35)] bg-[rgba(23,21,15,0.28)] px-5 py-[17px] text-[clamp(0.95rem,1.6vw,1.05rem)] backdrop-blur-[6px]">
+            <p class="mt-[clamp(16px,3vw,24px)] max-w-[30ch] rounded border border-[rgba(251,250,247,0.35)] bg-[rgba(10,25,47,0.28)] px-5 py-[17px] text-[clamp(0.95rem,1.6vw,1.05rem)] backdrop-blur-[6px]">
                 Considered essentials for everyday movement — designed to layer, built to last.
             </p>
 
             <a
-                href="#categories"
+                href="/produk"
                 class="mt-[clamp(20px,3vw,28px)] inline-flex items-center justify-center rounded-[2px] bg-cream px-8 py-4 text-[13.5px] font-semibold uppercase tracking-[0.04em] text-ink transition-opacity duration-200 hover:opacity-85"
             >
                 Shop the Archive
@@ -69,7 +69,7 @@ new #[Title('Estética Archive')] class extends Component
         @foreach ($this->categories as $category)
             <a
                 href="#categories"
-                class="relative aspect-[3/4] overflow-hidden rounded-md border border-line after:absolute after:inset-0 after:bg-[linear-gradient(180deg,rgba(23,21,15,0)_55%,rgba(23,21,15,0.6)_100%)] after:content-[''] {{ $category['surface'] }} {{ $category['span'] }}"
+                class="relative aspect-[3/4] overflow-hidden rounded-md border border-line after:absolute after:inset-0 after:bg-[linear-gradient(180deg,rgba(10,25,47,0)_55%,rgba(10,25,47,0.6)_100%)] after:content-[''] {{ $category['surface'] }} {{ $category['span'] }}"
             >
                 <span class="absolute bottom-5 left-5 z-1 rounded-[3px] bg-cream/92 px-[18px] py-2.5 text-[11.5px] font-bold uppercase tracking-[0.14em] text-ink">
                     {{ $category['label'] }}
