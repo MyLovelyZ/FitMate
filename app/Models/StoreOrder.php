@@ -52,6 +52,22 @@ class StoreOrder extends Model
     }
 
     /**
+     * Status paket per toko seperti yang dibaca pembeli.
+     *
+     * @var array<string, string>
+     */
+    public const BUYER_STATUS_LABELS = [
+        'pending' => 'Menunggu Diproses Penjual',
+        'processing' => 'Sedang Dikemas',
+        'shipped' => 'Dalam Perjalanan',
+        'delivered' => 'Sudah Sampai',
+        'completed' => 'Selesai',
+        'cancelled' => 'Dibatalkan',
+        'refunded' => 'Dana Dikembalikan',
+        'disputed' => 'Dalam Komplain',
+    ];
+
+    /**
      * Sengketa yang masih terbuka menahan pencairan escrow, walaupun batas
      * auto-release-nya sudah lewat.
      */

@@ -1,10 +1,11 @@
 <!DOCTYPE html>
-<html lang="{{ str_replace('_', '-', app()->getLocale()) }}" class="h-full scroll-smooth">
+<html lang="{{ str_replace('_', '-', app()->getLocale()) }}" class="h-full scroll-smooth" data-theme="{{ App\Models\User::themeFor(auth()->user()) }}">
     <head>
         @include('partials.head')
     </head>
 
     <body class="flex min-h-full flex-col bg-bg font-sans text-base leading-normal text-ink antialiased">
+        @include('partials.loading-bar')
         @include('partials.navbar')
 
         <main id="main" class="flex-1">
@@ -29,6 +30,8 @@
                 </p>
             </div>
         </footer>
+
+        @include('partials.toast')
 
         @livewireScripts
     </body>

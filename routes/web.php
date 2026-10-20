@@ -20,39 +20,43 @@ Route::middleware('guest')->group(function () {
     Route::livewire('/register', 'pages::register')->name('register');
 });
 
-Route::post('/login', [LoginController::class, 'login'])->name('login.store');
-    Route::post('/register', [RegisterController::class, 'register'])->name('register.store');
-
 Route::post('/logout', [AuthController::class, 'logout'])
     ->middleware('auth')
     ->name('logout');
 
+// Profil dipakai semua role; tab ukuran badan & alamat hanya muncul untuk pembeli.
+Route::livewire('/profil', 'pages::profile')
+    ->middleware('auth')
+    ->name('profile');
 
-    Route::middleware(['auth', 'admin'])->group(function () {
-    Route::get('/admin/dashboard', [AdminController::class, 'index'])->name('admin.dashboard');
+/**
+ * Area per role. Middleware role ada di `app/Http/Middleware` dan alias-nya
+ * didaftarkan di `bootstrap/app.php`.
+ */
+Route::middleware(['auth', 'admin'])->prefix('admin')->as('admin.')->group(function () {
+    Route::livewire('/dashboard', 'pages::admin-dashboard')->name('dashboard');
 });
 
 Route::middleware(['auth', 'cs'])->prefix('cs')->as('cs.')->group(function () {
-    // Dashboard CS / Tiket Bantuan / Live Chat Support
-    Route::livewire('/dashboard', 'pages::cs.dashboard')->name('dashboard');
-    Route::livewire('/chats', 'pages::cs.chats.index')->name('chats.index');
-    Route::livewire('/tickets', 'pages::cs.tickets.index')->name('tickets.index');
+    Route::livewire('/dashboard', 'pages::cs-dashboard')->name('dashboard');
+    Route::livewire('/chats', 'pages::cs-chats')->name('chats.index');
+    Route::livewire('/tickets', 'pages::cs-tickets')->name('tickets.index');
 });
 
-Route::middleware(['auth', 'seller'])->prefix('seller')->as('seller. ')->group(function () {
-    Route::livewire('/dashboard', 'pages::seller.dashboard')->name('dashboard');
-    Route::livewire('/products', 'pages::seller.products.index')->name('products.index');
-    Route::livewire('/orders', 'pages::seller.orders.index')->name('orders.index');
+Route::middleware(['auth', 'seller'])->prefix('seller')->as('seller.')->group(function () {
+    Route::livewire('/dashboard', 'pages::seller-dashboard')->name('dashboard');
+    Route::livewire('/products', 'pages::seller-products')->name('products.index');
+    Route::livewire('/orders', 'pages::seller-orders')->name('orders.index');
 });
 
-Route::middleware(['auth', 'superadmin'])->prefix('super-admin')->as('superadmin.')->group(function (){
-    Route::livewire('/dashboard', 'pages::superadmin.users.index')->name('dashboard');
-    Route::livewire('/users', 'pages::superadmin.users.index')->name('users.index');
-    Route::livewire('/settings', 'pages::superadmin.settings')->name('settings');
+Route::middleware(['auth', 'superadmin'])->prefix('super-admin')->as('superadmin.')->group(function () {
+    Route::redirect('/dashboard', '/super-admin/users')->name('dashboard');
+    Route::livewire('/users', 'pages::superadmin-users')->name('users.index');
+    Route::livewire('/settings', 'pages::superadmin-settings')->name('settings');
 });
 
-Route::middleware(['auth', 'user'])->prefix('user')->as('user. ')->group(function (){
-    Route::livewire('/profile', 'pages::user.profile')->name('name');
-    Route::livewire('/orders', 'pages::user.orders')->name('user.orders');
-    Route::livewire('cart', 'pages::user.cart')->name('user.cart');
+Route::middleware(['auth', 'user'])->prefix('user')->as('user.')->group(function () {
+    Route::livewire('/orders', 'pages::user-orders')->name('orders');
+    Route::livewire('/orders/{order:order_number}', 'pages::user-order-detail')->name('orders.show');
+    Route::livewire('/cart', 'pages::user-cart')->name('cart');
 });

@@ -12,7 +12,10 @@ new #[Title('Estética Archive')] class extends Component
      * Nama class ditulis utuh di sini (bukan dirangkai dari variabel) supaya
      * Tailwind tetap bisa memindainya.
      *
-     * @return array<int, array{label: string, surface: string, span: string}>
+     * `query` adalah filter katalog yang dibuka saat kartu diklik. `image` relatif
+     * ke `public/`; kalau null, kartu memakai gradien `surface` sebagai pengganti.
+     *
+     * @return array<int, array{label: string, query: array<string, string>, image: string|null, surface: string, span: string}>
      */
     #[Computed]
     public function categories(): array
@@ -20,16 +23,22 @@ new #[Title('Estética Archive')] class extends Component
         return [
             [
                 'label' => 'Menswear',
+                'query' => ['gender' => 'men'],
+                'image' => 'images/landing/menswear.webp',
                 'surface' => 'bg-[linear-gradient(150deg,#cbc4b5,#948d7c)]',
                 'span' => 'sm:col-span-2 sm:aspect-video lg:col-span-1 lg:aspect-[3/4]',
             ],
             [
                 'label' => 'Womenswear',
+                'query' => ['gender' => 'women'],
+                'image' => 'images/landing/womenswear.webp',
                 'surface' => 'bg-[linear-gradient(150deg,#d9d2c1,#b3ab98)]',
                 'span' => '',
             ],
             [
                 'label' => 'Accessories',
+                'query' => ['type' => 'aksesoris'],
+                'image' => 'images/products/tas-ransel-daypack-1.webp',
                 'surface' => 'bg-[linear-gradient(150deg,#c3bcac,#8b8474)]',
                 'span' => '',
             ],
@@ -40,9 +49,23 @@ new #[Title('Estética Archive')] class extends Component
 
 <div>
     {{-- Hero --}}
-    <section id="top" class="relative flex min-h-[78vh] items-end overflow-hidden">
+    <section id="top" class="on-photo relative flex min-h-[78vh] items-end overflow-hidden bg-ink">
+        {{-- Versi lebar untuk layar ≥ md, versi potret untuk mobile. Dekoratif, jadi alt kosong. --}}
+        <picture>
+            <source media="(min-width: 768px)" srcset="{{ asset('images/landing/hero-wide.webp') }}" width="1920" height="1280">
+            <img
+                src="{{ asset('images/landing/hero-tall.webp') }}"
+                alt=""
+                width="900"
+                height="1350"
+                fetchpriority="high"
+                class="absolute inset-0 size-full object-cover object-[center_40%]"
+            >
+        </picture>
+
+        {{-- Gelap di bawah dan kiri supaya teks krem tetap terbaca di atas foto. --}}
         <div
-            class="absolute inset-0 bg-cover bg-center bg-[linear-gradient(180deg,rgba(10,25,47,0)_40%,rgba(10,25,47,0.55)_100%),linear-gradient(120deg,#d8d2c4,#b9b2a0_45%,#8f8a7c)]"
+            class="absolute inset-0 bg-[linear-gradient(180deg,rgba(10,25,47,0)_40%,rgba(10,25,47,0.6)_100%),linear-gradient(90deg,rgba(10,25,47,0.45)_0%,rgba(10,25,47,0)_55%)]"
             aria-hidden="true"
         ></div>
 
@@ -56,7 +79,8 @@ new #[Title('Estética Archive')] class extends Component
             </p>
 
             <a
-                href="/produk"
+                href="{{ route('products.index') }}"
+                wire:navigate
                 class="mt-[clamp(20px,3vw,28px)] inline-flex items-center justify-center rounded-[2px] bg-cream px-8 py-4 text-[13.5px] font-semibold uppercase tracking-[0.04em] text-ink transition-opacity duration-200 hover:opacity-85"
             >
                 Shop the Archive
@@ -68,9 +92,20 @@ new #[Title('Estética Archive')] class extends Component
     <section id="categories" class="mx-auto grid max-w-[1280px] grid-cols-1 gap-5 px-side py-[clamp(48px,8vw,96px)] sm:grid-cols-2 lg:grid-cols-3">
         @foreach ($this->categories as $category)
             <a
-                href="#categories"
-                class="relative aspect-[3/4] overflow-hidden rounded-md border border-line after:absolute after:inset-0 after:bg-[linear-gradient(180deg,rgba(10,25,47,0)_55%,rgba(10,25,47,0.6)_100%)] after:content-[''] {{ $category['surface'] }} {{ $category['span'] }}"
+                href="{{ route('products.index', $category['query']) }}"
+                wire:navigate
+                class="group relative aspect-[3/4] overflow-hidden rounded-md border border-line after:absolute after:inset-0 after:bg-[linear-gradient(180deg,rgba(10,25,47,0)_55%,rgba(10,25,47,0.6)_100%)] after:content-[''] {{ $category['surface'] }} {{ $category['span'] }}"
             >
+                @if ($category['image'])
+                    <img
+                        src="{{ asset($category['image']) }}"
+                        alt=""
+                        loading="lazy"
+                        decoding="async"
+                        class="absolute inset-0 size-full object-cover object-top transition-transform duration-500 group-hover:scale-[1.03]"
+                    >
+                @endif
+
                 <span class="absolute bottom-5 left-5 z-1 rounded-[3px] bg-cream/92 px-[18px] py-2.5 text-[11.5px] font-bold uppercase tracking-[0.14em] text-ink">
                     {{ $category['label'] }}
                 </span>

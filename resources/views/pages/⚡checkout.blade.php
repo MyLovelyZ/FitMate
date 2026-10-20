@@ -225,13 +225,11 @@ new #[Title('Checkout')] class extends Component
 ?>
 
 <div class="mx-auto max-w-[1120px] px-side pb-[clamp(48px,8vw,80px)] pt-[clamp(20px,4vw,32px)]">
-    <a
-        href="{{ route('home') }}"
-        wire:navigate
-        class="inline-flex items-center gap-2 text-[12.5px] text-muted transition-colors hover:text-ink"
-    >
-        <span aria-hidden="true">&larr;</span> Back
-    </a>
+    <x-ui.breadcrumbs :items="array_merge(
+        ['Beranda' => route('home')],
+        auth()->user()?->role === 'user' ? ['Keranjang' => route('user.cart')] : ['Katalog' => route('products.index')],
+        ['Checkout' => null],
+    )" />
 
     <div class="mt-[clamp(24px,4vw,32px)] grid grid-cols-1 gap-[clamp(28px,5vw,55px)] lg:grid-cols-[minmax(0,1fr)_300px]">
         {{-- Kolom form --}}

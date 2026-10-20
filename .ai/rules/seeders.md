@@ -35,3 +35,8 @@ Data acuan (CategoryType, Category, Size, SizeGuide, Color, Store) pakai `update
 Keduanya wajib tetap aman dijalankan dua kali — `php artisan db:seed` sempat error `UNIQUE constraint failed: users.email` gara-gara ini.
 
 Urutan lengkap sekarang: CategoryType -> Category -> Size -> SizeGuide -> Color -> User -> Store -> Product -> Wallet -> MarketplaceOrder.
+
+## Foto produk demo = file public/images/products/{slug}-{n}.webp
+`ProductSeeder::seedImages()` membaca file `public/images/products/{slug-produk}-{n}.webp` dan menyimpannya ke `product_images` (nomor 1 = `is_primary`). Nambah/ganti foto demo cukup taruh file WebP 4:5 (900x1125) dengan nomor berikutnya lalu `php artisan db:seed --class=ProductSeeder`. Foto yang filenya dihapus ikut dibuang dari tabel.
+
+Karena DatabaseSeeder memakai WithoutModelEvents, seeder wajib mengisi `is_primary` sendiri — event "satu gambar utama" di model ProductImage tidak jalan saat seeding penuh.

@@ -20,6 +20,7 @@ class UserSeeder extends Seeder
      * @var array<int, array{0: string, 1: string, 2: string}>
      */
     private const STAFF = [
+        ['Demo Super Admin', 'superadmin@fitmate.test', 'superadmin'],
         ['Demo Admin', 'admin@fitmate.test', 'admin'],
         ['Demo CS', 'cs@fitmate.test', 'customerservice'],
         ['Demo Seller', 'seller@fitmate.test', 'seller'],

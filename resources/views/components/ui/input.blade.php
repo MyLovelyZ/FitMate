@@ -1,11 +1,11 @@
 @props(['name', 'label', 'type' => 'text', 'hint' => null])
 
 {{--
-    Field form standar: label, input, pesan error.
+    Field form standar (palet Estética, sama dengan form profil): label, input, pesan error.
     Untuk type="password" tombol lihat/sembunyikan disediakan lewat Alpine.
 --}}
 <div x-data="{ show: false }">
-    <label for="{{ $name }}" class="block text-sm font-medium text-navy-first">
+    <label for="{{ $name }}" class="block text-[12px] font-semibold">
         {{ $label }}
     </label>
 
@@ -19,18 +19,17 @@
                 type="{{ $type }}"
             @endif
             {{ $attributes->class([
-                'block w-full rounded-lg border px-3 py-2 text-sm shadow-sm transition outline-none',
-                'focus:border-brand-500 focus:ring-2 focus:ring-brand-100',
+                'h-11 w-full rounded-[2px] border bg-bg px-3 text-[13px] outline-none transition-colors placeholder:text-muted focus:border-ink',
                 'pr-16' => $type === 'password',
-                'border-red-400' => $errors->has($name),
-                'border-abu-second/60' => ! $errors->has($name),
+                'border-sale' => $errors->has($name),
+                'border-line' => ! $errors->has($name),
             ]) }}
         >
 
         @if ($type === 'password')
             <button
                 type="button"
-                class="absolute inset-y-0 right-0 px-3 text-xs font-medium text-abu-second hover:text-navy-first"
+                class="absolute inset-y-0 right-0 cursor-pointer px-3 text-[12px] font-medium text-muted transition-colors hover:text-ink"
                 x-on:click="show = ! show"
             >
                 <span x-show="! show" x-cloak>Lihat</span>
@@ -40,10 +39,10 @@
     </div>
 
     @if ($hint && ! $errors->has($name))
-        <p class="mt-1 text-xs text-abu-second">{{ $hint }}</p>
+        <p class="mt-1 text-[11.5px] text-muted">{{ $hint }}</p>
     @endif
 
     @error($name)
-        <p class="mt-1 text-xs text-red-600">{{ $message }}</p>
+        <p class="mt-1 text-[12px] text-sale">{{ $message }}</p>
     @enderror
 </div>

@@ -11,6 +11,7 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
+use Illuminate\Support\Str;
 
 #[Fillable(['name', 'email', 'password'])]
 #[Hidden(['password', 'remember_token'])]
@@ -27,6 +28,7 @@ class User extends Authenticatable
         'profile_picture',
         'gender',
         'role',
+        'theme',
     ];
 
     /**
@@ -40,6 +42,103 @@ class User extends Authenticatable
             'email_verified_at' => 'datetime',
             'password' => 'hashed',
         ];
+    }
+
+    /**
+     * Nama tampilan tiap role; kuncinya sama dengan enum `users.role`.
+     *
+     * @var array<string, string>
+     */
+    public const ROLE_LABELS = [
+        'user' => 'Pembeli',
+        'seller' => 'Seller',
+        'customerservice' => 'Customer Service',
+        'admin' => 'Admin',
+        'superadmin' => 'Super Admin',
+    ];
+
+    /**
+     * Pilihan tema di profil; kuncinya sama dengan enum `users.theme`.
+     *
+     * @var array<string, string>
+     */
+    public const THEMES = [
+        'light' => 'Terang',
+        'dark' => 'Gelap',
+        'system' => 'Ikuti Perangkat',
+    ];
+
+    /**
+     * Nilai `<html data-theme>`. Tamu dan akun lama tanpa pilihan mengikuti perangkat.
+     */
+    public static function themeFor(?self $user): string
+    {
+        return $user?->theme ?? 'system';
+    }
+
+    /**
+     * Nama route halaman utama untuk role ini. Dipakai sebagai tujuan setelah
+     * login dan tautan "Akun" di navbar.
+     */
+    public function dashboardRouteName(): string
+    {
+        return match ($this->role) {
+            'superadmin' => 'superadmin.dashboard',
+            'admin' => 'admin.dashboard',
+            'seller' => 'seller.dashboard',
+            'customerservice' => 'cs.dashboard',
+            default => 'profile',
+        };
+    }
+
+    /**
+     * Menu akun di navbar dan halaman profil: label => nama route.
+     *
+     * @return array<string, string>
+     */
+    public function accountLinks(): array
+    {
+        if ($this->role === 'user') {
+            return [
+                'Profil Saya' => 'profile',
+                'Pesanan' => 'user.orders',
+                'Keranjang' => 'user.cart',
+            ];
+        }
+
+        return [
+            'Dashboard' => $this->dashboardRouteName(),
+            'Profil Saya' => 'profile',
+        ];
+    }
+
+    /**
+     * Jumlah barang di keranjang (bukan jumlah baris), untuk lencana di navbar.
+     */
+    public function cartQuantity(): int
+    {
+        return (int) CartItem::query()
+            ->whereHas('cart', fn ($query) => $query->whereBelongsTo($this))
+            ->sum('quantity');
+    }
+
+    public function profilePictureUrl(): ?string
+    {
+        return $this->profile_picture
+            ? asset('storage/'.$this->profile_picture)
+            : null;
+    }
+
+    /**
+     * Maksimal dua huruf dari kata pertama dan terakhir nama, mis. "Demo Seller" → "DS".
+     */
+    public function initials(): string
+    {
+        $words = Str::of($this->name)->squish()->explode(' ')->filter();
+
+        return Str::upper(
+            Str::substr((string) $words->first(), 0, 1).($words->count() > 1 ? Str::substr((string) $words->last(), 0, 1) : '')
+        );
     }
 
     // Relationships

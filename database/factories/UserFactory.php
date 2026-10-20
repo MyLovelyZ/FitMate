@@ -52,6 +52,11 @@ class UserFactory extends Factory
         return $this->state(fn (array $attributes) => ['role' => 'admin']);
     }
 
+    public function superAdmin(): static
+    {
+        return $this->state(fn (array $attributes) => ['role' => 'superadmin']);
+    }
+
     public function seller(): static
     {
         return $this->state(fn (array $attributes) => ['role' => 'seller']);

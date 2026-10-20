@@ -1,6 +1,7 @@
 <?php
 
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Livewire\Features\SupportTesting\Testable;
 use Tests\TestCase;
 
 /*
@@ -44,7 +45,19 @@ expect()->extend('toBeOne', function () {
 |
 */
 
-function something()
+/**
+ * Memuat satu `@island(lazy: true)` seperti yang dilakukan browser saat island
+ * terlihat, lalu mengembalikan HTML island tersebut. Livewire belum punya
+ * helper test untuk island, dan `withoutLazyLoading()` tidak berlaku untuknya.
+ */
+function loadIsland(Testable $component, string $name): string
 {
-    // ..
+    $component->update(calls: [[
+        'method' => '__lazyLoadIsland',
+        'params' => [],
+        'path' => '',
+        'metadata' => ['island' => ['name' => $name, 'mode' => 'morph']],
+    ]]);
+
+    return implode('', $component->effects['islandFragments'] ?? []);
 }

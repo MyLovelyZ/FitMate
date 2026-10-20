@@ -4,6 +4,7 @@ namespace App\Http\Middleware;
 
 use Closure;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Auth;
 use Symfony\Component\HttpFoundation\Response;
 
 class UserMiddleware
@@ -15,14 +16,14 @@ class UserMiddleware
      */
     public function handle(Request $request, Closure $next): Response
     {
-        if (Auth::check () && in_array(Auth::user()->role, ['user', 'customer'])){
+        if (Auth::check() && Auth::user()->role === 'user') {
             return $next($request);
         }
 
-        if ($request->expectsJson()){
-            return response()->json(['message'=> 'Akses ditolak. Khusus Pelanggan.'], 403);
+        if ($request->expectsJson()) {
+            return response()->json(['message' => 'Akses ditolak. Khusus Pelanggan.'], 403);
         }
-        
+
         return redirect('/')->with('error', 'Anda tidak memiliki akses ke halaman ini.');
     }
 }

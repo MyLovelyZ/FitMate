@@ -1,10 +1,13 @@
 <?php
 
+use App\Models\Cart;
 use App\Models\Product;
+use App\Models\ProductImage;
 use App\Models\ProductVariant;
 use Illuminate\Database\Eloquent\Collection as EloquentCollection;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Enumerable;
+use Illuminate\Support\Facades\Auth;
 use Illuminate\View\View;
 use Livewire\Attributes\Computed;
 use Livewire\Component;
@@ -16,6 +19,9 @@ new class extends Component
     /** Ukuran yang sedang dipilih pembeli. Null untuk produk tanpa ukuran. */
     public ?int $selectedSizeId = null;
 
+    /** Warna yang sedang dipilih pembeli. Null untuk varian tanpa warna. */
+    public ?int $selectedColorId = null;
+
     /** Indeks foto yang sedang tampil besar. */
     public int $activeImage = 0;
 
@@ -25,12 +31,13 @@ new class extends Component
 
         $this->product = $product;
 
-        // Halaman dibuka dengan ukuran pertama yang masih ada stoknya supaya harga
-        // dan ketersediaan langsung terlihat tanpa pembeli harus memilih dulu.
+        // Halaman dibuka dengan ukuran & warna pertama yang masih ada stoknya supaya
+        // harga dan ketersediaan langsung terlihat tanpa pembeli harus memilih dulu.
         $preselected = $this->sizes->first(fn (array $size): bool => $size['in_stock'])
             ?? $this->sizes->first();
 
         $this->selectedSizeId = $preselected['id'] ?? null;
+        $this->selectedColorId = $this->firstAvailableColorId();
     }
 
     public function selectSize(int $sizeId): void
@@ -42,6 +49,87 @@ new class extends Component
         }
 
         $this->selectedSizeId = $sizeId;
+        $this->forgetSelection();
+
+        // Warna yang tadi dipilih belum tentu ada stoknya di ukuran baru.
+        if (! $this->colors->contains(fn (array $color): bool => $color['id'] === $this->selectedColorId && $color['in_stock'])) {
+            $this->selectedColorId = $this->firstAvailableColorId();
+            $this->forgetSelection();
+        }
+    }
+
+    public function selectColor(int $colorId): void
+    {
+        if (! $this->colors->contains('id', $colorId)) {
+            return;
+        }
+
+        $this->selectedColorId = $colorId;
+        $this->forgetSelection();
+    }
+
+    /**
+     * Tamu diarahkan ke login lalu kembali ke produk ini; akun staf tidak punya
+     * keranjang. Jumlahnya dibatasi stok varian, termasuk yang sudah ada di keranjang.
+     */
+    public function addToCart(int $quantity = 1): void
+    {
+        $this->resetErrorBag('cart');
+
+        $user = Auth::user();
+
+        if (! $user) {
+            redirect()->setIntendedUrl(route('products.show', $this->product));
+            $this->redirectRoute('login', navigate: true);
+
+            return;
+        }
+
+        if ($user->role !== 'user') {
+            $this->addError('cart', 'Keranjang hanya tersedia untuk akun pembeli.');
+
+            return;
+        }
+
+        $variant = $this->selectedVariant;
+
+        if (! $variant?->isInStock()) {
+            $this->addError('cart', 'Pilihan ini sedang habis.');
+
+            return;
+        }
+
+        $added = Cart::forUser($user)->add($variant, max(1, $quantity));
+
+        if ($added === 0) {
+            $this->addError('cart', "Semua stok pilihan ini ({$variant->stock}) sudah ada di keranjangmu.");
+
+            return;
+        }
+
+        $this->dispatch('cart-updated', count: $user->cartQuantity());
+        $this->dispatch(
+            'notify',
+            message: "{$added}× {$this->product->name} masuk ke keranjang.",
+            url: route('user.cart'),
+            action: 'Lihat Keranjang',
+        );
+    }
+
+    /**
+     * Pilihan ukuran/warna berubah: hitung ulang varian yang dipilih.
+     */
+    protected function forgetSelection(): void
+    {
+        unset($this->variantsForSelectedSize, $this->colors, $this->selectedVariant, $this->isAvailable, $this->price);
+    }
+
+    protected function firstAvailableColorId(): ?int
+    {
+        $color = $this->colors->first(fn (array $color): bool => $color['in_stock'])
+            ?? $this->colors->first();
+
+        return $color['id'] ?? null;
     }
 
     /**
@@ -83,17 +171,50 @@ new class extends Component
     }
 
     /**
-     * Varian yang akan masuk keranjang: ukuran terpilih, warna pertama yang masih
-     * ada stoknya.
+     * Varian di ukuran terpilih; produk tanpa ukuran memakai semua variannya.
+     *
+     * @return EloquentCollection<int, ProductVariant>
+     */
+    #[Computed]
+    public function variantsForSelectedSize(): EloquentCollection
+    {
+        return $this->sizes->isEmpty()
+            ? $this->variants
+            : $this->variants->where('size_id', $this->selectedSizeId)->values();
+    }
+
+    /**
+     * Warna yang dijual di ukuran terpilih beserta ketersediaannya.
+     *
+     * @return Collection<int, array{id: int, name: string, hex: string, in_stock: bool}>
+     */
+    #[Computed]
+    public function colors(): Collection
+    {
+        return $this->variantsForSelectedSize
+            ->filter(fn (ProductVariant $variant): bool => $variant->color !== null)
+            ->map(fn (ProductVariant $variant): array => [
+                'id' => $variant->color->id,
+                'name' => $variant->color->name,
+                'hex' => $variant->color->hex_code,
+                'in_stock' => $variant->isInStock(),
+            ])
+            ->unique('id')
+            ->values()
+            ->toBase();
+    }
+
+    /**
+     * Varian yang akan masuk keranjang: ukuran dan warna terpilih. Kalau warnanya
+     * belum dipilih (varian tanpa warna), ambil yang masih ada stoknya.
      */
     #[Computed]
     public function selectedVariant(): ?ProductVariant
     {
-        $candidates = $this->sizes->isEmpty()
-            ? $this->variants
-            : $this->variants->where('size_id', $this->selectedSizeId);
+        $candidates = $this->variantsForSelectedSize;
 
-        return $candidates->first(fn (ProductVariant $variant): bool => $variant->stock > 0)
+        return ($this->selectedColorId ? $candidates->firstWhere('color_id', $this->selectedColorId) : null)
+            ?? $candidates->first(fn (ProductVariant $variant): bool => $variant->stock > 0)
             ?? $candidates->first();
     }
 
@@ -116,37 +237,35 @@ new class extends Component
     }
 
     /**
-     * Foto produk. Tabel gambar produk belum ada (BE-053), jadi selama varian
-     * belum mengisi kolom `image`, galeri memakai bidang warna sebagai penahan
-     * tempat. Nama class gradiennya ditulis utuh supaya tetap terpindai Tailwind.
+     * Foto produk, gambar utama di depan. Produk yang belum punya foto tetap dapat
+     * satu bidang warna sebagai penahan tempat. Bidang warna yang sama juga
+     * tampil di belakang foto selama foto dimuat. Nama class gradiennya ditulis
+     * utuh supaya tetap terpindai Tailwind.
      *
-     * @return array<int, array{image: ?string, surface: string}>
+     * @return array<int, array{url: ?string, alt: string, surface: string}>
      */
     #[Computed]
     public function gallery(): array
     {
-        $surfaces = [
-            'bg-[linear-gradient(150deg,#cbc4b5,#948d7c)]',
-            'bg-[linear-gradient(150deg,#d9d2c1,#b3ab98)]',
-            'bg-[linear-gradient(150deg,#c3bcac,#8b8474)]',
-            'bg-[linear-gradient(150deg,#e0dacd,#a8a091)]',
-        ];
+        $surface = 'bg-[linear-gradient(150deg,#cbc4b5,#948d7c)]';
 
-        $images = $this->variants->pluck('image')->filter()->unique()->values();
-
-        return collect($surfaces)
-            ->map(fn (string $surface, int $index): array => [
-                'image' => $images->get($index),
+        $photos = $this->product->images()->get()
+            ->map(fn (ProductImage $image): array => [
+                'url' => $image->url,
+                'alt' => $image->alt_text ?? $this->product->name,
                 'surface' => $surface,
-            ])
-            ->all();
+            ]);
+
+        return $photos->isNotEmpty()
+            ? $photos->all()
+            : [['url' => null, 'alt' => $this->product->name, 'surface' => $surface]];
     }
 
     /**
      * Foto yang tampil besar. Indeksnya bisa diubah dari sisi klien, jadi dijaga
      * tetap berada di dalam rentang galeri.
      *
-     * @return array{image: ?string, surface: string}
+     * @return array{url: ?string, alt: string, surface: string}
      */
     #[Computed]
     public function activePhoto(): array
@@ -175,6 +294,23 @@ new class extends Component
         ]));
     }
 
+    /**
+     * Beranda › Katalog › jenis kategori (tersaring di katalog) › produk ini.
+     *
+     * @return array<string, string|null>
+     */
+    #[Computed]
+    public function breadcrumbs(): array
+    {
+        $categoryType = $this->product->category->categoryType;
+
+        return array_merge(
+            ['Beranda' => route('home'), 'Katalog' => route('products.index')],
+            $categoryType ? [$categoryType->name => route('products.index', ['type' => $categoryType->slug])] : [],
+            [$this->product->name => null],
+        );
+    }
+
     public function render(): View
     {
         return $this->view()->title($this->product->name);
@@ -183,47 +319,42 @@ new class extends Component
 ?>
 
 <div class="mx-auto max-w-[1280px] px-side py-[clamp(20px,4vw,32px)]">
-    <a
-        href="{{ route('home') }}#categories"
-        wire:navigate
-        class="inline-flex items-center gap-2 text-[13px] text-muted transition-colors duration-150 hover:text-ink"
-    >
-        <svg class="size-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-            <path d="M19 12H5m0 0 6-6m-6 6 6 6" />
-        </svg>
-        Back
-    </a>
+    <x-ui.breadcrumbs :items="$this->breadcrumbs" />
 
     <div class="mt-[clamp(16px,3vw,28px)] grid grid-cols-1 items-start gap-[clamp(28px,5vw,64px)] lg:grid-cols-[minmax(0,1fr)_minmax(0,380px)]">
-        {{-- Galeri: strip thumbnail di kiri, foto besar di kanan. --}}
+        {{-- Galeri: strip thumbnail di kiri, foto besar di kanan. Strip disembunyikan kalau fotonya cuma satu. --}}
         <div class="flex flex-col gap-4 sm:flex-row">
-            <div class="order-2 flex shrink-0 gap-3 sm:order-1 sm:flex-col">
-                @foreach ($this->gallery as $index => $photo)
-                    <button
-                        type="button"
-                        wire:key="thumb-{{ $index }}"
-                        wire:click="$set('activeImage', {{ $index }})"
-                        @class([
-                            'relative aspect-[4/5] w-[68px] shrink-0 cursor-pointer overflow-hidden rounded-sm border transition-colors duration-150',
-                            $photo['surface'],
-                            'border-ink' => $activeImage === $index,
-                            'border-line hover:border-muted' => $activeImage !== $index,
-                        ])
-                        aria-label="Lihat foto {{ $index + 1 }}"
-                    >
-                        @if ($photo['image'])
-                            <img src="{{ asset('storage/'.$photo['image']) }}" alt="" class="size-full object-cover">
-                        @endif
-                    </button>
-                @endforeach
-            </div>
+            @if (count($this->gallery) > 1)
+                <div class="order-2 flex shrink-0 gap-3 overflow-x-auto sm:order-1 sm:flex-col sm:overflow-visible">
+                    @foreach ($this->gallery as $index => $photo)
+                        <button
+                            type="button"
+                            wire:key="thumb-{{ $index }}"
+                            wire:click="$set('activeImage', {{ $index }})"
+                            @class([
+                                'relative aspect-[4/5] w-[68px] shrink-0 cursor-pointer overflow-hidden rounded-sm border transition-colors duration-150',
+                                $photo['surface'],
+                                'border-ink' => $activeImage === $index,
+                                'border-line hover:border-muted' => $activeImage !== $index,
+                            ])
+                            aria-label="Lihat foto {{ $index + 1 }}"
+                        >
+                            @if ($photo['url'])
+                                <img src="{{ $photo['url'] }}" alt="" loading="lazy" decoding="async" class="size-full object-cover">
+                            @endif
+                        </button>
+                    @endforeach
+                </div>
+            @endif
 
             <div class="order-1 min-w-0 flex-1 sm:order-2">
                 <div class="relative aspect-[4/5] overflow-hidden rounded-md border border-line {{ $this->activePhoto['surface'] }}">
-                    @if ($this->activePhoto['image'])
+                    @if ($this->activePhoto['url'])
                         <img
-                            src="{{ asset('storage/'.$this->activePhoto['image']) }}"
-                            alt="{{ $product->name }}"
+                            wire:key="photo-{{ $activeImage }}"
+                            src="{{ $this->activePhoto['url'] }}"
+                            alt="{{ $this->activePhoto['alt'] }}"
+                            fetchpriority="high"
                             class="size-full object-cover"
                         >
                     @endif
@@ -279,22 +410,102 @@ new class extends Component
                 </div>
             @endif
 
-            {{-- TODO(BE-064): sambungkan ke keranjang. Sekarang tombolnya baru memantulkan ketersediaan stok. --}}
-            <button
-                type="button"
-                @disabled(! $this->isAvailable)
-                class="mt-5 flex w-full cursor-pointer items-center justify-center gap-3 rounded-[2px] bg-ink px-8 py-4 text-[13.5px] font-semibold uppercase tracking-[0.04em] text-cream transition-opacity duration-200 hover:opacity-85 disabled:cursor-not-allowed disabled:bg-line disabled:text-muted disabled:hover:opacity-100"
-            >
-                @if ($this->isAvailable)
-                    Add to Bag
+            @if ($this->colors->isNotEmpty())
+                <div class="mt-5">
+                    <div class="flex items-baseline justify-between gap-4">
+                        <span class="text-[11px] font-semibold uppercase tracking-[0.18em] text-muted">Color</span>
+                        <span class="text-[12.5px] text-muted">{{ $this->colors->firstWhere('id', $selectedColorId)['name'] ?? '' }}</span>
+                    </div>
 
-                    <svg class="size-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-                        <path d="M5 12h14m0 0-6-6m6 6-6 6" />
-                    </svg>
-                @else
-                    Sold Out
+                    <div class="mt-3 flex flex-wrap gap-2.5">
+                        @foreach ($this->colors as $color)
+                            <button
+                                type="button"
+                                wire:key="color-{{ $color['id'] }}"
+                                wire:click="selectColor({{ $color['id'] }})"
+                                @disabled(! $color['in_stock'])
+                                @class([
+                                    'size-[30px] rounded-full border transition-[box-shadow,border-color] duration-150',
+                                    'cursor-not-allowed opacity-35' => ! $color['in_stock'],
+                                    'border-ink shadow-[0_0_0_2px_var(--color-bg),0_0_0_3px_var(--color-ink)]' => $selectedColorId === $color['id'],
+                                    'cursor-pointer border-line hover:border-muted' => $color['in_stock'] && $selectedColorId !== $color['id'],
+                                ])
+                                style="background-color: {{ $color['hex'] }}"
+                                aria-pressed="{{ $selectedColorId === $color['id'] ? 'true' : 'false' }}"
+                                aria-label="{{ $color['name'] }}{{ $color['in_stock'] ? '' : ' (habis)' }}"
+                                title="{{ $color['name'] }}{{ $color['in_stock'] ? '' : ' — habis' }}"
+                            ></button>
+                        @endforeach
+                    </div>
+                </div>
+            @endif
+
+            @php
+                $isStaff = auth()->check() && auth()->user()->role !== 'user';
+                $canBuy = $this->isAvailable && ! $isStaff;
+                $maxQuantity = max(1, (int) $this->selectedVariant?->stock);
+            @endphp
+
+            {{--
+                Jumlah diatur di browser (Alpine) supaya tombol +/− tidak membuat request.
+                `wire:key` ikut varian terpilih, jadi saat ukuran/warna berganti blok ini
+                dibuat ulang dengan jumlah 1 dan batas stok yang baru. Server tetap
+                membatasi ulang ke stok saat `addToCart` dipanggil.
+            --}}
+            <div
+                wire:key="buy-{{ $this->selectedVariant?->id ?? 'none' }}"
+                class="mt-5 flex gap-3"
+                x-data="{ quantity: 1, adding: false }"
+            >
+                @if ($canBuy)
+                    <div class="flex h-[54px] shrink-0 items-center rounded-[2px] border border-line" role="group" aria-label="Jumlah">
+                        <button
+                            type="button"
+                            class="flex h-full w-10 cursor-pointer items-center justify-center text-lg text-muted transition-colors hover:text-ink disabled:cursor-not-allowed disabled:opacity-40"
+                            x-on:click="quantity = Math.max(1, quantity - 1)"
+                            x-bind:disabled="quantity <= 1"
+                            aria-label="Kurangi jumlah"
+                        >&minus;</button>
+                        <span class="w-7 text-center text-[14px] font-semibold" x-text="quantity" aria-live="polite">1</span>
+                        <button
+                            type="button"
+                            class="flex h-full w-10 cursor-pointer items-center justify-center text-lg text-muted transition-colors hover:text-ink disabled:cursor-not-allowed disabled:opacity-40"
+                            x-on:click="quantity = Math.min({{ $maxQuantity }}, quantity + 1)"
+                            x-bind:disabled="quantity >= {{ $maxQuantity }}"
+                            aria-label="Tambah jumlah"
+                        >+</button>
+                    </div>
                 @endif
-            </button>
+
+                <button
+                    type="button"
+                    x-on:click="adding = true; $wire.addToCart(quantity).finally(() => { adding = false; quantity = 1 })"
+                    x-bind:disabled="adding || {{ $canBuy ? 'false' : 'true' }}"
+                    @disabled(! $canBuy)
+                    class="flex h-[54px] w-full cursor-pointer items-center justify-center gap-3 rounded-[2px] bg-ink px-8 text-[13.5px] font-semibold uppercase tracking-[0.04em] text-cream transition-opacity duration-200 hover:opacity-85 disabled:cursor-not-allowed disabled:bg-line disabled:text-muted disabled:hover:opacity-100"
+                >
+                    @if ($isStaff)
+                        Khusus Akun Pembeli
+                    @elseif ($this->isAvailable)
+                        <svg wire:loading wire:target="addToCart" class="size-4 animate-spin" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                            <circle cx="12" cy="12" r="9" stroke="currentColor" stroke-opacity="0.25" stroke-width="3" />
+                            <path d="M21 12a9 9 0 0 0-9-9" stroke="currentColor" stroke-width="3" stroke-linecap="round" />
+                        </svg>
+                        <span wire:loading.remove wire:target="addToCart">Add to Bag</span>
+                        <span wire:loading wire:target="addToCart">Menambahkan…</span>
+
+                        <svg wire:loading.remove wire:target="addToCart" class="size-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                            <path d="M5 12h14m0 0-6-6m6 6-6 6" />
+                        </svg>
+                    @else
+                        Sold Out
+                    @endif
+                </button>
+            </div>
+
+            @error('cart')
+                <p class="mt-2 text-[12.5px] text-sale" role="alert">{{ $message }}</p>
+            @enderror
 
             <p class="mt-[clamp(20px,3vw,28px)] text-[13.5px] leading-[1.75] text-muted">
                 {{ $product->description }}

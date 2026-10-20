@@ -10,6 +10,18 @@ class Shipment extends Model
 {
     use HasFactory;
 
+    /**
+     * @var array<string, string>
+     */
+    public const STATUS_LABELS = [
+        'pending' => 'Menunggu Dijemput Kurir',
+        'picked_up' => 'Sudah Dijemput Kurir',
+        'in_transit' => 'Dalam Perjalanan',
+        'delivered' => 'Sudah Diterima',
+        'failed' => 'Gagal Dikirim',
+        'returned' => 'Dikembalikan ke Penjual',
+    ];
+
     protected $fillable = [
         'store_order_id',
         'courier',

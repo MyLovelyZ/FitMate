@@ -155,3 +155,13 @@ it('menolak produk yang tidak aktif atau sudah dihapus', function () {
 
     $this->get(route('products.show', $product))->assertNotFound();
 });
+
+it('menampilkan breadcrumbs sampai jenis kategori dan nama produk', function () {
+    $product = productWithSizes();
+    $categoryType = $product->category->categoryType;
+
+    $this->get(route('products.show', $product))
+        ->assertOk()
+        ->assertSeeInOrder(['Beranda', 'Katalog', $categoryType->name, $product->name])
+        ->assertSee(route('products.index', ['type' => $categoryType->slug]), false);
+});

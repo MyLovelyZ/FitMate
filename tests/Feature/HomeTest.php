@@ -24,6 +24,23 @@ it('menampilkan hero, kategori, dan ethos di beranda', function () {
         ->assertSee('id="ethos"', false);
 });
 
+it('memakai foto untuk hero dan kartu kategori', function () {
+    $images = [
+        'images/landing/hero-wide.webp',
+        'images/landing/hero-tall.webp',
+        'images/landing/menswear.webp',
+        'images/landing/womenswear.webp',
+        'images/products/tas-ransel-daypack-1.webp',
+    ];
+
+    $response = $this->get(route('home'))->assertOk();
+
+    foreach ($images as $image) {
+        expect(public_path($image))->toBeFile();
+        $response->assertSee(asset($image), false);
+    }
+});
+
 it('memakai token tema dan font Estética di layout', function () {
     $this->get(route('home'))
         ->assertSee('bg-bg font-sans', false)
@@ -45,4 +62,13 @@ it('menawarkan keluar di navbar untuk pengguna yang sudah masuk', function () {
         ->get(route('home'))
         ->assertSee(route('logout'), false)
         ->assertSee('Keluar dari '.$user->name, false);
+});
+
+it('memasang bar loading request dan wadah notifikasi di layout', function () {
+    $this->get(route('home'))
+        ->assertSee('data-request-bar', false)
+        ->assertSee('x-on:notify.window', false);
+
+    expect(config('livewire.navigate.show_progress_bar'))->toBeTrue()
+        ->and(config('livewire.navigate.progress_bar_color'))->toBe('var(--color-ink)');
 });

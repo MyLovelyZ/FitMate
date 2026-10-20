@@ -12,11 +12,11 @@ class SellerMiddleware
     /**
      * Handle an incoming request.
      *
-     * @param  \Closure(\Illuminate\Http\Request): (\Symfony\Component\HttpFoundation\Response)  $next
+     * @param  Closure(Request): (Response)  $next
      */
     public function handle(Request $request, Closure $next): Response
     {
-        if (Auth::check() && in_array(Auth::user()->role, ['seller', 'penjual', 'admin'])) {
+        if (Auth::check() && in_array(Auth::user()->role, ['seller', 'admin'])) {
             return $next($request);
         }
 
