@@ -12,16 +12,7 @@ use Livewire\Component;
 
 new class extends Component
 {
-    /**
-     * @var array<string, string>
-     */
-    public const PAYMENT_METHODS = [
-        'qris' => 'QRIS',
-        'virtual_account' => 'Virtual Account',
-        'bank_transfer' => 'Transfer Bank',
-        'ewallet' => 'E-Wallet',
-        'credit_card' => 'Kartu Kredit',
-    ];
+    public const PAYMENT_METHODS = Payment::METHOD_LABELS;
 
     public Order $order;
 
@@ -42,7 +33,7 @@ new class extends Component
     public function storeOrders(): Collection
     {
         return $this->order->storeOrders()
-            ->with(['store', 'shipment', 'items.product.primaryImage'])
+            ->with(['store', 'shipment', 'escrowHold', 'items.product.primaryImage'])
             ->orderBy('id')
             ->get();
     }
@@ -117,6 +108,64 @@ new class extends Component
         ];
     }
 
+    /**
+     * Pengganti halaman bayar gateway selama KEP-3 belum diputuskan. Lewat jalur
+     * yang sama dengan webhook (`Payment::settle()`), jadi escrow, status order,
+     * dan idempotensinya ikut teruji.
+     */
+    public function pay(): void
+    {
+        $payment = $this->pendingPayment;
+
+        if (! $payment || $this->order->status !== 'pending_payment') {
+            return;
+        }
+
+        if ($payment->isExpired()) {
+            $this->order->cancelUnpaid('expired');
+            $this->refreshOrder();
+            $this->dispatch('notify', message: 'Batas waktu pembayaran sudah lewat, pesanan dibatalkan.');
+
+            return;
+        }
+
+        $payment->settle(Payment::SIMULATOR.'-'.$payment->reference, ['source' => 'tombol simulasi di halaman pesanan']);
+
+        $this->redirectRoute('checkout.success', $this->order, navigate: true);
+    }
+
+    public function cancelOrder(): void
+    {
+        if ($this->order->cancelUnpaid()) {
+            $this->dispatch('notify', message: 'Pesanan dibatalkan dan stok dikembalikan.');
+        }
+
+        $this->refreshOrder();
+    }
+
+    /**
+     * Pembeli menekan "Pesanan Diterima" untuk satu paket: paket selesai dan
+     * dana toko itu diteruskan ke penjual.
+     */
+    public function confirmReceived(int $storeOrderId): void
+    {
+        $storeOrder = $this->order->storeOrders()->whereKey($storeOrderId)->firstOrFail();
+
+        abort_unless(in_array($storeOrder->status, ['shipped', 'delivered'], true), 403);
+
+        $storeOrder->complete('buyer_confirmed');
+
+        $this->refreshOrder();
+        $this->dispatch('notify', message: 'Terima kasih! Dana sudah diteruskan ke penjual.');
+    }
+
+    protected function refreshOrder(): void
+    {
+        $this->order->refresh();
+
+        unset($this->storeOrders, $this->pendingPayment, $this->stepDates);
+    }
+
     public function render(): View
     {
         return $this->view()->title('Pesanan '.$this->order->order_number);
@@ -153,7 +202,7 @@ new class extends Component
                         @if ($order->status === 'expired')
                             Batas waktu pembayaran sudah lewat, jadi pesanan ini dibatalkan otomatis.
                         @elseif ($order->status === 'refunded')
-                            Dana pesanan ini sudah dikembalikan ke metode pembayaranmu.
+                            Dana pesanan ini sudah dikembalikan ke saldo FitMate-mu.
                         @else
                             Pesanan ini dibatalkan dan tidak akan diproses.
                         @endif
@@ -182,6 +231,12 @@ new class extends Component
                         <dt class="text-muted">Metode</dt>
                         <dd class="font-semibold">{{ $this::PAYMENT_METHODS[$payment->method] ?? $payment->method }}</dd>
                     </div>
+                    @if ($payment->qr_string)
+                        <div class="sm:col-span-2">
+                            <dt class="text-muted">Kode QRIS</dt>
+                            <dd class="truncate font-mono text-[12px]">{{ $payment->qr_string }}</dd>
+                        </div>
+                    @endif
                     @if ($payment->va_number)
                         <div x-data="{ copied: false }">
                             <dt class="text-muted">Nomor {{ strtoupper((string) $payment->va_bank) }} Virtual Account</dt>
@@ -198,6 +253,28 @@ new class extends Component
                     @endif
                 </dl>
             @endif
+
+            <div class="mt-5 flex flex-wrap gap-2.5">
+                <button
+                    type="button"
+                    wire:click="pay"
+                    class="inline-flex items-center justify-center gap-2 rounded-[2px] bg-ink px-5 py-3 text-[11.5px] font-bold uppercase tracking-[0.1em] text-cream transition-opacity duration-200 hover:opacity-85 disabled:cursor-wait disabled:opacity-60"
+                >
+                    <span wire:loading.remove wire:target="pay">Bayar Sekarang (Simulasi)</span>
+                    <span wire:loading wire:target="pay">Memproses…</span>
+                </button>
+
+                <button
+                    type="button"
+                    wire:click="cancelOrder"
+                    wire:confirm="Batalkan pesanan ini? Barangnya akan dikembalikan ke stok toko."
+                    class="cursor-pointer rounded-[2px] px-4 py-3 text-[11.5px] font-bold uppercase tracking-[0.1em] text-muted transition-colors hover:text-sale"
+                >
+                    Batalkan Pesanan
+                </button>
+            </div>
+
+            <p class="mt-2.5 text-[11.5px] text-muted">Payment gateway belum terpasang; tombol simulasi menandai pembayaran ini lunas.</p>
         </section>
     @endif
 
@@ -211,10 +288,31 @@ new class extends Component
                             <p class="truncate text-[13.5px] font-semibold">{{ $storeOrder->store?->name ?? 'Toko' }}</p>
                             <p class="text-[11.5px] text-muted">{{ $storeOrder->store_order_number }}</p>
                         </div>
-                        <span class="text-[12px] font-semibold">{{ $this->packageLabels[$storeOrder->status] ?? $storeOrder->status }}</span>
+                        <div class="flex items-center gap-3">
+                            <span class="text-[12px] font-semibold">{{ $this->packageLabels[$storeOrder->status] ?? $storeOrder->status }}</span>
+
+                            @if (in_array($storeOrder->status, ['shipped', 'delivered'], true))
+                                <button
+                                    type="button"
+                                    wire:click="confirmReceived({{ $storeOrder->id }})"
+                                    wire:confirm="Pesanan dari {{ $storeOrder->store?->name ?? 'toko ini' }} sudah kamu terima dengan baik? Dana akan diteruskan ke penjual."
+                                    class="cursor-pointer rounded-[2px] bg-ink px-3.5 py-2 text-[10.5px] font-bold uppercase tracking-[0.1em] text-cream transition-opacity duration-200 hover:opacity-85"
+                                >
+                                    Pesanan Diterima
+                                </button>
+                            @endif
+                        </div>
                     </div>
 
-                    @if ($shipment = $storeOrder->shipment)
+                    @if ($storeOrder->status === 'delivered' && $storeOrder->escrowHold?->auto_release_at)
+                        <p class="border-b border-line px-[18px] py-2.5 text-[12px] text-muted">
+                            Paket sudah sampai. Kalau tidak ada keluhan, dana diteruskan otomatis ke penjual pada {{ $storeOrder->escrowHold->auto_release_at->format('d M Y') }}.
+                        </p>
+                    @elseif ($storeOrder->status === 'cancelled' && $storeOrder->note)
+                        <p class="border-b border-line px-[18px] py-2.5 text-[12px] text-muted">Dibatalkan: {{ $storeOrder->note }}</p>
+                    @endif
+
+                    @if (($shipment = $storeOrder->shipment) && $order->isPaid() && $storeOrder->status !== 'cancelled')
                         <div class="flex flex-wrap items-start justify-between gap-3 border-b border-line bg-bg/60 px-[18px] py-3 text-[12.5px]">
                             <div>
                                 <p class="font-semibold">

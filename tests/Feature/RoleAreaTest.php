@@ -51,7 +51,7 @@ it('keeps other roles out of a role area', function (string $routeName) {
 })->with(['admin.dashboard', 'cs.dashboard', 'seller.dashboard', 'superadmin.users.index']);
 
 it('keeps staff out of the buyer area', function () {
-    $this->actingAs(User::factory()->seller()->create())
+    $this->actingAs(User::factory()->customerService()->create())
         ->get(route('user.cart'))
         ->assertRedirect('/');
 });

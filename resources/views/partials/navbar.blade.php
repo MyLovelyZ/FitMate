@@ -120,7 +120,7 @@
                 </button>
 
                 {{-- Keranjang khusus pembeli; tamu diarahkan ke login oleh middleware auth. --}}
-                @if (! auth()->check() || auth()->user()->role === 'user')
+                @if (! auth()->check() || auth()->user()->canShop())
                     @php
                         $cartQuantity = auth()->user()?->cartQuantity() ?? 0;
                     @endphp

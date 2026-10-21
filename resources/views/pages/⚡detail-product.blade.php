@@ -27,7 +27,8 @@ new class extends Component
 
     public function mount(Product $product): void
     {
-        abort_unless($product->is_active, 404);
+        // Produk dari toko yang belum disetujui, ditolak, atau ditangguhkan tidak tampil ke publik.
+        abort_unless($product->isPurchasable(), 404);
 
         $this->product = $product;
 
@@ -85,8 +86,14 @@ new class extends Component
             return;
         }
 
-        if ($user->role !== 'user') {
+        if (! $user->canShop()) {
             $this->addError('cart', 'Keranjang hanya tersedia untuk akun pembeli.');
+
+            return;
+        }
+
+        if ($this->isOwnProduct) {
+            $this->addError('cart', 'Ini produk tokomu sendiri.');
 
             return;
         }
@@ -114,6 +121,15 @@ new class extends Component
             url: route('user.cart'),
             action: 'Lihat Keranjang',
         );
+    }
+
+    /**
+     * Seller boleh belanja, tapi tidak membeli produk tokonya sendiri.
+     */
+    #[Computed]
+    public function isOwnProduct(): bool
+    {
+        return Auth::check() && $this->product->store->user_id === Auth::id();
     }
 
     /**
@@ -364,9 +380,13 @@ new class extends Component
 
         {{-- Panel informasi & pembelian --}}
         <div class="lg:pt-1.5">
-            <p class="text-[11px] font-semibold uppercase tracking-[0.18em] text-muted">
+            <a
+                href="{{ route('stores.show', $product->store) }}"
+                wire:navigate.hover
+                class="text-[11px] font-semibold uppercase tracking-[0.18em] text-muted underline-offset-4 transition-colors hover:text-ink hover:underline"
+            >
                 {{ $product->store->name }}
-            </p>
+            </a>
 
             <h1 class="mt-3 font-display text-[clamp(1.9rem,4.5vw,2.9rem)] font-normal uppercase leading-[1.05] tracking-[-0.01em]">
                 {{ $product->name }}
@@ -441,8 +461,8 @@ new class extends Component
             @endif
 
             @php
-                $isStaff = auth()->check() && auth()->user()->role !== 'user';
-                $canBuy = $this->isAvailable && ! $isStaff;
+                $isStaff = auth()->check() && ! auth()->user()->canShop();
+                $canBuy = $this->isAvailable && ! $isStaff && ! $this->isOwnProduct;
                 $maxQuantity = max(1, (int) $this->selectedVariant?->stock);
             @endphp
 
@@ -486,6 +506,8 @@ new class extends Component
                 >
                     @if ($isStaff)
                         Khusus Akun Pembeli
+                    @elseif ($this->isOwnProduct)
+                        Produk Tokomu Sendiri
                     @elseif ($this->isAvailable)
                         <svg wire:loading wire:target="addToCart" class="size-4 animate-spin" viewBox="0 0 24 24" fill="none" aria-hidden="true">
                             <circle cx="12" cy="12" r="9" stroke="currentColor" stroke-opacity="0.25" stroke-width="3" />

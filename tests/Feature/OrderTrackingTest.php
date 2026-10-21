@@ -160,7 +160,7 @@ it('keeps guests and staff away from order tracking', function () {
 
     $this->get(route('user.orders.show', $order))->assertRedirect(route('login'));
 
-    $this->actingAs(User::factory()->seller()->create())
+    $this->actingAs(User::factory()->customerService()->create())
         ->get(route('user.orders.show', $order))
         ->assertRedirect('/');
 });

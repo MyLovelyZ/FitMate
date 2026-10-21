@@ -22,6 +22,20 @@ class Shipment extends Model
         'returned' => 'Dikembalikan ke Penjual',
     ];
 
+    /**
+     * Pilihan pengiriman di checkout, berlaku untuk setiap paket toko.
+     *
+     * Masih tarif flat per paket — KEP-4 (ongkir lewat API kurir atau flat) belum
+     * diputuskan. Kalau nanti pakai API kurir, `cost` di sini diganti hasil hitungan.
+     *
+     * @var array<string, array{courier: string, service: string, label: string, eta: string, cost: int}>
+     */
+    public const OPTIONS = [
+        'jne-reg' => ['courier' => 'jne', 'service' => 'reg', 'label' => 'JNE Reguler', 'eta' => '3–5 hari', 'cost' => 20000],
+        'jnt-ez' => ['courier' => 'jnt', 'service' => 'ez', 'label' => 'J&T EZ', 'eta' => '2–4 hari', 'cost' => 22000],
+        'sicepat-best' => ['courier' => 'sicepat', 'service' => 'best', 'label' => 'SiCepat BEST', 'eta' => '1–2 hari', 'cost' => 35000],
+    ];
+
     protected $fillable = [
         'store_order_id',
         'courier',

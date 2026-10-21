@@ -6,6 +6,7 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Support\Facades\DB;
 
 class Wallet extends Model
 {
@@ -42,6 +43,63 @@ class Wallet extends Model
     public function isBalanced(): bool
     {
         return $this->ledgerBalance() === (string) $this->balance_available;
+    }
+
+    /**
+     * Wallet milik user; dibuat saat pertama kali dibutuhkan (mis. seller baru
+     * menerima escrow pertamanya).
+     */
+    public static function forUser(User $user): self
+    {
+        return static::firstOrCreate(['user_id' => $user->id], ['currency' => 'IDR']);
+    }
+
+    /**
+     * Satu-satunya pintu untuk mengubah saldo yang bisa ditarik: kunci baris
+     * wallet, catat satu baris buku besar, lalu perbarui cache `balance_available`.
+     * `idempotency_key` unique, jadi percobaan kedua dengan kunci yang sama
+     * ditolak database dan seluruh transaksinya batal.
+     */
+    public function post(
+        string $type,
+        string $direction,
+        float $amount,
+        Model $reference,
+        string $idempotencyKey,
+        string $description,
+    ): WalletTransaction {
+        return DB::transaction(function () use ($type, $direction, $amount, $reference, $idempotencyKey, $description): WalletTransaction {
+            $balance = (float) static::whereKey($this->id)->lockForUpdate()->value('balance_available');
+            $balanceAfter = $direction === 'credit' ? $balance + $amount : $balance - $amount;
+
+            $transaction = $this->transactions()->create([
+                'type' => $type,
+                'direction' => $direction,
+                'amount' => $amount,
+                'balance_after' => $balanceAfter,
+                'reference_type' => $reference->getMorphClass(),
+                'reference_id' => $reference->getKey(),
+                'idempotency_key' => $idempotencyKey,
+                'description' => $description,
+            ]);
+
+            $this->forceFill(['balance_available' => $balanceAfter])->save();
+
+            return $transaction;
+        });
+    }
+
+    /**
+     * Menaikkan/menurunkan cache `balance_pending`. Tidak ada baris buku besar:
+     * sumber kebenarannya adalah `escrow_holds` yang masih `held`.
+     */
+    public function adjustPending(float $amount): void
+    {
+        DB::transaction(function () use ($amount): void {
+            $pending = (float) static::whereKey($this->id)->lockForUpdate()->value('balance_pending');
+
+            $this->forceFill(['balance_pending' => $pending + $amount])->save();
+        });
     }
 
     // relationships

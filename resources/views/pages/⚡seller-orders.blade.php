@@ -88,12 +88,16 @@ new #[Title('Pesanan Toko')] class extends Component
                 <tbody>
                     @foreach ($this->orders as $storeOrder)
                         <tr wire:key="store-order-{{ $storeOrder->id }}" class="border-t border-line">
-                            <td class="px-[18px] py-3 font-medium">{{ $storeOrder->store_order_number }}</td>
+                            <td class="px-[18px] py-3 font-medium">
+                                <a href="{{ route('seller.orders.show', $storeOrder) }}" wire:navigate class="underline-offset-4 hover:underline">{{ $storeOrder->store_order_number }}</a>
+                            </td>
                             <td class="px-[18px] py-3">{{ $storeOrder->order?->user?->name }}</td>
                             <td class="px-[18px] py-3">{{ $storeOrder->items_count }}</td>
                             <td class="px-[18px] py-3">Rp {{ number_format((float) $storeOrder->total, 0, ',', '.') }}</td>
                             <td class="px-[18px] py-3">
-                                <span class="rounded-[3px] bg-cream px-2 py-0.5 text-[11px] font-semibold">{{ $this::STATUSES[$storeOrder->status] ?? $storeOrder->status }}</span>
+                                <span class="rounded-[3px] bg-cream px-2 py-0.5 text-[11px] font-semibold">
+                                    {{ $storeOrder->status === 'pending' && ! $storeOrder->order?->isPaid() ? 'Menunggu Bayar' : ($this::STATUSES[$storeOrder->status] ?? $storeOrder->status) }}
+                                </span>
                             </td>
                             <td class="px-[18px] py-3 text-muted">{{ $storeOrder->created_at->format('d M Y') }}</td>
                         </tr>

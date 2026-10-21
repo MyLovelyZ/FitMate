@@ -2,6 +2,8 @@
 
 namespace App\Models;
 
+use Illuminate\Database\Eloquent\Attributes\Scope;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -35,6 +37,26 @@ class Product extends Model
             'compare_at_price' => 'decimal:2',
             'is_active' => 'boolean',
         ];
+    }
+
+    /**
+     * Boleh dilihat dan dibeli pembeli: produknya aktif dan tokonya sedang
+     * berjualan (bukan pending, ditolak, atau ditangguhkan).
+     */
+    public function isPurchasable(): bool
+    {
+        return $this->is_active && (bool) $this->store?->canSell();
+    }
+
+    /**
+     * Versi query dari `isPurchasable()` untuk katalog dan halaman toko.
+     *
+     * @param  Builder<Product>  $query
+     */
+    #[Scope]
+    protected function purchasable(Builder $query): void
+    {
+        $query->where('is_active', true)->whereHas('store', fn (Builder $store) => $store->selling());
     }
 
     /**

@@ -149,7 +149,7 @@ new #[Title('Profil Saya')] class extends Component
     {
         $tabs = ['data' => 'Data Diri', 'keamanan' => 'Keamanan'];
 
-        if ($this->user->role === 'user') {
+        if ($this->user->canShop()) {
             $tabs += ['ukuran' => 'Ukuran Badan', 'alamat' => 'Alamat'];
         }
 
@@ -248,7 +248,7 @@ new #[Title('Profil Saya')] class extends Component
 
     public function saveMeasurements(): void
     {
-        abort_unless($this->user->role === 'user', 403);
+        abort_unless($this->user->canShop(), 403);
 
         $this->validate(
             collect(self::MEASUREMENTS)
@@ -272,7 +272,7 @@ new #[Title('Profil Saya')] class extends Component
 
     public function saveAddress(): void
     {
-        abort_unless($this->user->role === 'user', 403);
+        abort_unless($this->user->canShop(), 403);
 
         $this->validate([
             'address.label' => ['required', 'string', 'max:50'],

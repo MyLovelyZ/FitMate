@@ -92,17 +92,44 @@ class User extends Authenticatable
     }
 
     /**
+     * Pembeli dan seller boleh belanja (keranjang, pesanan, ukuran badan, alamat).
+     * Staf platform (CS, admin, superadmin) tidak.
+     */
+    public function canShop(): bool
+    {
+        return in_array($this->role, ['user', 'seller'], true);
+    }
+
+    /**
+     * Pembeli yang belum punya toko aktif boleh mengajukan/memperbaiki pengajuan toko.
+     */
+    public function canApplyForStore(): bool
+    {
+        return $this->role === 'user';
+    }
+
+    /**
      * Menu akun di navbar dan halaman profil: label => nama route.
      *
      * @return array<string, string>
      */
     public function accountLinks(): array
     {
+        $shopping = [
+            'Profil Saya' => 'profile',
+            'Pesanan' => 'user.orders',
+            'Keranjang' => 'user.cart',
+        ];
+
+        if ($this->role === 'seller') {
+            return ['Dashboard Toko' => 'seller.dashboard'] + $shopping;
+        }
+
         if ($this->role === 'user') {
-            return [
-                'Profil Saya' => 'profile',
-                'Pesanan' => 'user.orders',
-                'Keranjang' => 'user.cart',
+            $storeStatus = $this->store?->status;
+
+            return $shopping + [
+                ($storeStatus === null ? 'Buka Toko' : 'Status Pengajuan Toko') => 'stores.create',
             ];
         }
 

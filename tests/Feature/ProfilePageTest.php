@@ -38,14 +38,14 @@ it('shows body size and address tabs only to buyers', function () {
         ->assertSee('Ukuran Badan')
         ->assertSee('Alamat');
 
-    $this->actingAs(User::factory()->seller()->create())
+    $this->actingAs(User::factory()->customerService()->create())
         ->get(route('profile'))
         ->assertDontSee('Ukuran Badan');
 });
 
 it('falls back to the first tab when the url asks for a tab the role cannot see', function () {
     Livewire::withQueryParams(['tab' => 'ukuran'])
-        ->actingAs(User::factory()->seller()->create())
+        ->actingAs(User::factory()->customerService()->create())
         ->test('pages::profile')
         ->assertSet('tab', 'data');
 });
@@ -244,7 +244,7 @@ it('renders the saved theme on the html element', function () {
 });
 
 it('forbids staff from saving buyer-only data', function () {
-    Livewire::actingAs(User::factory()->seller()->create())
+    Livewire::actingAs(User::factory()->customerService()->create())
         ->test('pages::profile')
         ->call('saveMeasurements')
         ->assertForbidden();
@@ -256,9 +256,15 @@ it('lists account links for the role in the navbar menu', function () {
         ->assertSee(route('profile'), false)
         ->assertSee(route('user.orders'), false);
 
+    // Seller tetap bisa belanja, jadi menunya berisi dashboard toko sekaligus keranjang.
     $this->actingAs(User::factory()->seller()->create())
         ->get(route('home'))
         ->assertSee(route('seller.dashboard'), false)
         ->assertSee(route('profile'), false)
+        ->assertSee(route('user.cart'), false);
+
+    $this->actingAs(User::factory()->customerService()->create())
+        ->get(route('home'))
+        ->assertSee(route('cs.dashboard'), false)
         ->assertDontSee(route('user.cart'), false);
 });

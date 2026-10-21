@@ -168,7 +168,7 @@ new #[Title('Catalog')] class extends Component
     public function products(): LengthAwarePaginator
     {
         return Product::query()
-            ->where('is_active', true)
+            ->purchasable()
             ->with(['category', 'images'])
             ->when($this->searchTerms, fn (Builder $query): Builder => $query->where(function (Builder $matches): void {
                 foreach ($this->searchTerms as $term) {
@@ -219,7 +219,7 @@ new #[Title('Catalog')] class extends Component
             ->where('is_active', true)
             ->whereHas('productVariants', fn (Builder $query): Builder => $query
                 ->where('is_active', true)
-                ->whereHas('product', fn (Builder $product): Builder => $product->where('is_active', true)))
+                ->whereHas('product', fn (Builder $product): Builder => $product->purchasable()))
             ->when($this->type !== '', fn (Builder $query): Builder => $query->whereHas(
                 'categoryType',
                 fn (Builder $categoryType): Builder => $categoryType->where('slug', $this->type)
@@ -240,7 +240,7 @@ new #[Title('Catalog')] class extends Component
             ->where('is_active', true)
             ->whereHas('productVariants', fn (Builder $query): Builder => $query
                 ->where('is_active', true)
-                ->whereHas('product', fn (Builder $product): Builder => $product->where('is_active', true)))
+                ->whereHas('product', fn (Builder $product): Builder => $product->purchasable()))
             ->orderBy('id')
             ->get();
     }
@@ -327,7 +327,7 @@ new #[Title('Catalog')] class extends Component
     public function newArrivalIds(): array
     {
         return Product::query()
-            ->where('is_active', true)
+            ->purchasable()
             ->latest()
             ->orderByDesc('id')
             ->limit(self::NEW_ARRIVAL_COUNT)
@@ -345,7 +345,7 @@ new #[Title('Catalog')] class extends Component
     {
         return CategoryType::query()
             ->where('is_active', true)
-            ->whereHas('categories.products', fn (Builder $query): Builder => $query->where('is_active', true))
+            ->whereHas('categories.products', fn (Builder $query): Builder => $query->purchasable())
             ->orderBy('id')
             ->get();
     }
@@ -425,31 +425,6 @@ new #[Title('Catalog')] class extends Component
             ->flatMap(fn (int $page, int $index): array => $index > 0 && $page - $pages[$index - 1] > 1
                 ? [null, $page]
                 : [$page])
-            ->all();
-    }
-
-    /**
-     * Bidang warna di belakang foto kartu: tampil selama foto dimuat, dan jadi
-     * pengganti untuk produk yang belum punya foto. Dipetakan dari id supaya tiap
-     * kartu konsisten antar halaman. Nama class gradiennya ditulis utuh supaya
-     * tetap terpindai Tailwind.
-     *
-     * @return array<int, string>
-     */
-    #[Computed]
-    public function placeholderSurfaces(): array
-    {
-        $surfaces = [
-            'bg-[linear-gradient(150deg,#cbc4b5,#948d7c)]',
-            'bg-[linear-gradient(150deg,#d9d2c1,#b3ab98)]',
-            'bg-[linear-gradient(150deg,#c3bcac,#8b8474)]',
-            'bg-[linear-gradient(150deg,#e0dacd,#a8a091)]',
-        ];
-
-        return $this->products
-            ->mapWithKeys(fn (Product $product): array => [
-                $product->id => $surfaces[$product->id % count($surfaces)],
-            ])
             ->all();
     }
 
@@ -705,57 +680,7 @@ new #[Title('Catalog')] class extends Component
                     @else
                         <div class="mt-[clamp(20px,3vw,28px)] grid grid-cols-2 gap-x-5 gap-y-[clamp(24px,4vw,36px)] sm:grid-cols-3 xl:grid-cols-4">
                             @foreach ($this->products as $product)
-                                <a
-                                    wire:key="product-{{ $product->id }}"
-                                    href="{{ route('products.show', $product) }}"
-                                    wire:navigate
-                                    class="group flex flex-col"
-                                >
-                                    <div class="relative aspect-[4/5] overflow-hidden rounded-md border border-line {{ $this->placeholderSurfaces[$product->id] }}">
-                                        @if ($photo = $product->images->first())
-                                            <img
-                                                src="{{ $photo->url }}"
-                                                alt="{{ $photo->alt_text ?? $product->name }}"
-                                                loading="lazy"
-                                                decoding="async"
-                                                class="absolute inset-0 size-full object-cover transition-transform duration-500 group-hover:scale-[1.03]"
-                                            >
-                                        @endif
-
-                                        {{-- Foto kedua muncul saat kartu disorot, jadi pembeli langsung lihat sisi lain produknya. --}}
-                                        @if ($hoverPhoto = $product->images->get(1))
-                                            <img
-                                                src="{{ $hoverPhoto->url }}"
-                                                alt=""
-                                                loading="lazy"
-                                                decoding="async"
-                                                class="absolute inset-0 size-full object-cover opacity-0 transition-opacity duration-500 group-hover:opacity-100"
-                                            >
-                                        @endif
-
-                                        @if ($product->isOnSale())
-                                            <span class="absolute left-3 top-3 z-1 rounded-[3px] bg-sale px-2 py-1 text-[10px] font-bold uppercase tracking-[0.14em] text-cream">
-                                                Sale
-                                            </span>
-                                        @endif
-
-                                        <span class="absolute bottom-3 left-3 z-1 rounded-[3px] bg-cream/92 px-2.5 py-1 text-[10px] font-bold uppercase tracking-[0.14em] text-ink opacity-0 transition-opacity duration-200 group-hover:opacity-100">
-                                            {{ $product->category->name }}
-                                        </span>
-                                    </div>
-
-                                    <p class="mt-3 text-[13.5px] leading-[1.45] transition-colors duration-150 group-hover:text-muted">
-                                        {{ $product->name }}
-                                    </p>
-
-                                    <p class="mt-1.5 flex flex-wrap items-baseline gap-x-2 text-[13.5px] font-medium">
-                                        <span @class(['text-sale' => $product->isOnSale()])>Rp {{ number_format((float) $product->base_price, 0, ',', '.') }}</span>
-
-                                        @if ($product->isOnSale())
-                                            <s class="text-[12px] font-normal text-muted">Rp {{ number_format((float) $product->compare_at_price, 0, ',', '.') }}</s>
-                                        @endif
-                                    </p>
-                                </a>
+                                <x-ui.product-card :product="$product" wire:key="product-{{ $product->id }}" />
                             @endforeach
                         </div>
 

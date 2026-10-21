@@ -130,13 +130,13 @@ it('preselects a color in stock and shows sold out for an empty one', function (
 
 it('keeps staff accounts out of the cart', function () {
     ['product' => $product] = cartProduct();
-    $seller = User::factory()->seller()->create();
+    $staff = User::factory()->customerService()->create();
 
-    $this->actingAs($seller)
+    $this->actingAs($staff)
         ->get(route('products.show', $product))
         ->assertSee('Khusus Akun Pembeli');
 
-    Livewire::actingAs($seller)
+    Livewire::actingAs($staff)
         ->test('pages::detail-product', ['product' => $product])
         ->call('addToCart', 1)
         ->assertHasErrors('cart');

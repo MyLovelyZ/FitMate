@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Controllers\AuthController;
+use App\Http\Controllers\StoreIdentityCardController;
 use Illuminate\Support\Facades\Route;
 
 /**
@@ -12,8 +13,14 @@ Route::livewire('/', 'pages::home')->name('home');
 Route::livewire('/produk', 'pages::catalog')->name('products.index');
 Route::livewire('/produk/{product:slug}', 'pages::detail-product')->name('products.show');
 
-Route::livewire('/checkout', 'pages::checkout')->name('checkout');
-Route::livewire('/checkout/success', 'pages::checkout-success')->name('checkout.success');
+// Halaman publik tiap toko; hanya toko yang sedang berjualan.
+Route::livewire('/toko/{store:slug}', 'pages::store-show')->name('stores.show');
+
+// Checkout memakai keranjang, jadi hanya untuk akun yang boleh belanja (alias `user`).
+Route::middleware(['auth', 'user'])->group(function () {
+    Route::livewire('/checkout', 'pages::checkout')->name('checkout');
+    Route::livewire('/checkout/success/{order:order_number}', 'pages::checkout-success')->name('checkout.success');
+});
 
 Route::middleware('guest')->group(function () {
     Route::livewire('/login', 'pages::login')->name('login');
@@ -25,6 +32,11 @@ Route::post('/logout', [AuthController::class, 'logout'])
     ->name('logout');
 
 // Profil dipakai semua role; tab ukuran badan & alamat hanya muncul untuk pembeli.
+// Pengajuan toko oleh pembeli (KEP-5): form, status menunggu review, dan perbaikan setelah ditolak.
+Route::livewire('/buka-toko', 'pages::store-apply')
+    ->middleware('auth')
+    ->name('stores.create');
+
 Route::livewire('/profil', 'pages::profile')
     ->middleware('auth')
     ->name('profile');
@@ -35,6 +47,10 @@ Route::livewire('/profil', 'pages::profile')
  */
 Route::middleware(['auth', 'admin'])->prefix('admin')->as('admin.')->group(function () {
     Route::livewire('/dashboard', 'pages::admin-dashboard')->name('dashboard');
+    Route::livewire('/stores', 'pages::admin-stores')->name('stores.index');
+    Route::livewire('/stores/{store}', 'pages::admin-store-review')->name('stores.show');
+    // Foto KTP ada di disk privat, jadi dialirkan lewat controller khusus admin.
+    Route::get('/stores/{store}/identity-card', StoreIdentityCardController::class)->name('stores.identity-card');
 });
 
 Route::middleware(['auth', 'cs'])->prefix('cs')->as('cs.')->group(function () {
@@ -47,6 +63,7 @@ Route::middleware(['auth', 'seller'])->prefix('seller')->as('seller.')->group(fu
     Route::livewire('/dashboard', 'pages::seller-dashboard')->name('dashboard');
     Route::livewire('/products', 'pages::seller-products')->name('products.index');
     Route::livewire('/orders', 'pages::seller-orders')->name('orders.index');
+    Route::livewire('/orders/{storeOrder:store_order_number}', 'pages::seller-order-detail')->name('orders.show');
 });
 
 Route::middleware(['auth', 'superadmin'])->prefix('super-admin')->as('superadmin.')->group(function () {

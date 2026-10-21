@@ -23,4 +23,4 @@ Halaman area role tetap komponen datar `pages::<area>-<halaman>` (mis. `pages::s
 Login & register ditangani komponen Livewire `pages::login`/`pages::register` — jangan tambah LoginController/RegisterController. Tujuan setelah login per role ada di `User::dashboardRouteName()`. Halaman yang butuh login dites di `tests/Feature/RoleAreaTest.php`, bukan ViewSmokeTest.
 
 ## Profil satu halaman untuk semua role: route `profile`
-Halaman profil adalah `pages::profile` di `/profil` (nama route `profile`, middleware `auth` saja) dan dipakai SEMUA role — jangan buat profil terpisah per area. Tab ukuran badan & alamat hanya untuk role `user`. Menu akun di navbar dan tab area pembeli diambil dari `User::accountLinks()`; route `user.profile` sudah dihapus.
+Halaman profil adalah `pages::profile` di `/profil` (nama route `profile`, middleware `auth` saja) dan dipakai SEMUA role — jangan buat profil terpisah per area. Tab ukuran badan & alamat untuk akun yang `canShop()` (pembeli dan seller). Menu akun di navbar dan tab area pembeli diambil dari `User::accountLinks()`; route `user.profile` sudah dihapus.

@@ -45,7 +45,7 @@ Ini bukan tugas developer. Tim akan berhenti kalau belum diputuskan.
 - [ ] **KEP-2** Nomor sepatu pakai sistem apa? Dokumentasi mengasumsikan EU (38–45). Konfirmasi.
 - [ ] **KEP-3** Payment gateway mana? Midtrans, Xendit, atau manual transfer dulu? Menentukan `BE-072`.
 - [ ] **KEP-4** Ongkir dihitung pakai API kurir (RajaOngkir/Biteship) atau tarif flat dulu? Menentukan `BE-071`.
-- [ ] **KEP-5** Seller daftar sendiri lalu diverifikasi admin, atau didaftarkan admin? Menentukan `BE-050`.
+- [x] **KEP-5** Seller daftar sendiri lalu diverifikasi admin, atau didaftarkan admin? Menentukan `BE-050`. → **Diputuskan:** daftar sendiri di `/buka-toko` (data toko, KTP, rekening), lalu diverifikasi admin. Seller tetap bisa belanja.
 - [ ] **KEP-6** Perlu fitur payout ke seller di rilis pertama, atau settlement manual dulu? Kalau perlu, backlog ini harus ditambah ~5 tugas.
 
 ---
@@ -208,7 +208,7 @@ Bisa paralel dengan Fase 3.
 
 🔒 Terblokir `BE-013`, `BE-034`.
 
-- [ ] **BE-050 🔒 `M` Pendaftaran & verifikasi toko.** Terblokir **KEP-5**. Alur status: `pending` → `active`, plus penolakan dan suspend.
+- [x] **BE-050 `M` Pendaftaran & verifikasi toko.** ~~Terblokir **KEP-5**.~~ Selesai: `pages::store-apply`, `pages::admin-stores`, `pages::admin-store-review`. Alur status: `pending` → `active`, plus penolakan dan suspend.
 - [ ] **BE-051 `S` CRUD profil toko** — logo, banner, alamat asal pengiriman.
 - [ ] **BE-052 `L` CRUD produk untuk seller.** Termasuk varian dan gambar. **Wajib lewat validasi `BE-034`.**
 - [ ] **BE-053 `M` Upload & kelola gambar produk.** Urutan, penanda `is_primary` (hanya boleh satu per produk).
@@ -240,24 +240,25 @@ Bisa paralel dengan Fase 3.
 
 🔒 Terblokir `BE-064`. Fase paling rawan bug — jangan dikerjakan terburu-buru.
 
-- [ ] **BE-070 🔴🧪 `L` Checkout: pecah keranjang jadi order multi-seller.**
+- [x] **BE-070 🔴🧪 `L` Checkout: pecah keranjang jadi order multi-seller.** Selesai: `Order::placeFromCart()` + `pages::checkout`, dites di `CheckoutTest`. `recommended_size_label` masih kosong sampai BE-062 jadi.
   Satu `orders` → banyak `store_orders` → `order_items`.
   **Wajib dalam transaksi database.** Salin semua data ke `order_items` (nama produk, harga, ukuran, warna) — kalau seller mengubah harga besok, nota lama harus tetap menunjukkan angka yang dulu.
   Isi juga `recommended_size_label` dari hasil rekomendasi saat itu.
   Salin alamat ke kolom `shipping_*` di `orders`, jangan referensi ke `user_addresses`.
 
-- [ ] **BE-071 🔒 `M` Perhitungan ongkir per toko.** Terblokir **KEP-4**.
-- [ ] **BE-072 🔒 `L` Integrasi payment gateway.** Terblokir **KEP-3**. Termasuk webhook, dan penanganan pembayaran kedaluwarsa.
+- [ ] **BE-071 🔒 `M` Perhitungan ongkir per toko.** Terblokir **KEP-4**. Sementara: tarif flat per paket di `Shipment::OPTIONS`.
+- [ ] **BE-072 🔒 `L` Integrasi payment gateway.** Terblokir **KEP-3**. Termasuk webhook, dan penanganan pembayaran kedaluwarsa. Sementara: provider `simulator` + tombol "Bayar Sekarang (Simulasi)". Webhook nanti cukup memanggil `Payment::settle($eventId, $payload)` (sudah idempotent). Kedaluwarsa sudah ditangani `orders:expire-unpaid`.
 - [ ] **BE-073 🧪 `M` Penerapan & validasi kupon.**
   Cek: aktif, dalam rentang tanggal, `min_purchase` terpenuhi, `usage_limit` belum habis, user belum pernah pakai.
   Untuk tipe `percentage`, potongannya dibatasi `max_discount`. Catat ke `coupon_usages`.
-- [ ] **BE-074 🧪 `M` Alur status order.**
+- [x] **BE-074 🧪 `M` Alur status order.**
   Status `store_orders` jalan sendiri-sendiri per toko. Status `orders` induk diturunkan dari gabungan semuanya. Definisikan transisi yang sah dan tolak yang tidak.
-- [ ] **BE-075 `M` Pengurangan stok saat checkout.** Kunci baris varian selama transaksi. Kembalikan stok kalau order dibatalkan.
-- [ ] **BE-076 `M` Manajemen pengiriman.** Input resi oleh seller, lacak status, tandai terkirim.
-- [ ] **BE-077 `M` Dashboard order untuk seller.** Daftar `store_orders` milik tokonya saja — **pastikan seller tidak bisa melihat order toko lain.**
-- [ ] **BE-078 `S` Riwayat order untuk pembeli.**
-- [ ] **BE-079 `M` Pembatalan & refund.**
+  Selesai: `StoreOrder::TRANSITIONS` + `Order::syncStatusFromStores()`, dites di `OrderTransactionTest`.
+- [x] **BE-075 `M` Pengurangan stok saat checkout.** Kunci baris varian selama transaksi. Kembalikan stok kalau order dibatalkan. Selesai: termasuk order kedaluwarsa.
+- [x] **BE-076 `M` Manajemen pengiriman.** Input resi oleh seller, lacak status, tandai terkirim. Selesai di `pages::seller-order-detail`; "tandai sampai" masih ditekan seller sampai ada integrasi kurir.
+- [x] **BE-077 `M` Dashboard order untuk seller.** Daftar `store_orders` milik tokonya saja — **pastikan seller tidak bisa melihat order toko lain.**
+- [x] **BE-078 `S` Riwayat order untuk pembeli.**
+- [ ] **BE-079 `M` Pembatalan & refund.** Sebagian: pembeli membatalkan order belum dibayar; seller membatalkan paket yang sudah dibayar → refund ke saldo pembeli. Belum: komplain/refund dari pembeli setelah barang sampai (lewat `disputes`, Fase 8/CS).
 
 ---
 

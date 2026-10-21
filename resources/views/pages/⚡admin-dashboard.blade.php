@@ -37,7 +37,7 @@ new #[Title('Dashboard Admin')] class extends Component
     {
         return Store::with('owner')
             ->where('status', 'pending')
-            ->latest()
+            ->orderBy('submitted_at')
             ->limit(10)
             ->get();
     }
@@ -49,6 +49,7 @@ new #[Title('Dashboard Admin')] class extends Component
         :breadcrumbs="['Beranda' => route('home'), 'Admin' => null]"
         title="Dashboard Admin"
         description="Ringkasan marketplace FitMate."
+        :links="['admin.dashboard' => 'Dashboard', 'admin.stores.index' => 'Toko']"
     />
 
     {{-- Hitungan agregat dimuat lazy supaya kerangka halaman tampil lebih dulu. --}}
@@ -69,7 +70,10 @@ new #[Title('Dashboard Admin')] class extends Component
     @endisland
 
     <section class="mt-10">
-        <h2 class="text-[13px] font-semibold uppercase tracking-[0.1em]">Toko Menunggu Verifikasi</h2>
+        <div class="flex items-center justify-between gap-4">
+            <h2 class="text-[13px] font-semibold uppercase tracking-[0.1em]">Toko Menunggu Verifikasi</h2>
+            <a href="{{ route('admin.stores.index') }}" wire:navigate.hover class="text-[12.5px] font-medium hover:underline">Lihat semua</a>
+        </div>
 
         @island(name: 'pending-stores', lazy: true)
             @placeholder
@@ -86,7 +90,8 @@ new #[Title('Dashboard Admin')] class extends Component
                             <th class="px-[18px] py-3 font-semibold">Toko</th>
                             <th class="px-[18px] py-3 font-semibold">Pemilik</th>
                             <th class="px-[18px] py-3 font-semibold">Kota</th>
-                            <th class="px-[18px] py-3 font-semibold">Daftar</th>
+                            <th class="px-[18px] py-3 font-semibold">Diajukan</th>
+                            <th class="px-[18px] py-3"><span class="sr-only">Aksi</span></th>
                         </tr>
                     </thead>
                     <tbody>
@@ -95,7 +100,10 @@ new #[Title('Dashboard Admin')] class extends Component
                                 <td class="px-[18px] py-3 font-medium">{{ $store->name }}</td>
                                 <td class="px-[18px] py-3">{{ $store->owner?->name }}</td>
                                 <td class="px-[18px] py-3 text-muted">{{ $store->city ?? '—' }}</td>
-                                <td class="px-[18px] py-3 text-muted">{{ $store->created_at->format('d M Y') }}</td>
+                                <td class="px-[18px] py-3 text-muted">{{ ($store->submitted_at ?? $store->created_at)->format('d M Y') }}</td>
+                                <td class="px-[18px] py-3 text-right">
+                                    <a href="{{ route('admin.stores.show', $store) }}" wire:navigate.hover class="inline-flex items-center rounded-[2px] border border-line px-3 py-1.5 text-[12px] font-semibold transition-colors hover:border-ink">Tinjau</a>
+                                </td>
                             </tr>
                         @endforeach
                     </tbody>
