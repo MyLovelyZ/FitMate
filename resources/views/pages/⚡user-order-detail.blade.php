@@ -33,7 +33,7 @@ new class extends Component
     public function storeOrders(): Collection
     {
         return $this->order->storeOrders()
-            ->with(['store', 'shipment', 'escrowHold', 'items.product.primaryImage'])
+            ->with(['store', 'shipment', 'escrowHold', 'items.product.primaryImage', 'items.product.store'])
             ->orderBy('id')
             ->get();
     }
@@ -350,14 +350,10 @@ new class extends Component
                     <ul class="divide-y divide-line">
                         @foreach ($storeOrder->items as $item)
                             <li wire:key="item-{{ $item->id }}" class="flex items-center gap-3 px-[18px] py-3.5">
-                                <div class="relative h-[72px] w-[58px] shrink-0 overflow-hidden rounded-sm border border-line bg-[linear-gradient(150deg,#d9d2c1,#b3ab98)]">
-                                    @if ($image = $item->product?->primaryImage)
-                                        <img src="{{ $image->url }}" alt="" loading="lazy" decoding="async" class="size-full object-cover">
-                                    @endif
-                                </div>
+                                <x-ui.product-thumb :product="$item->product" class="h-[72px] w-[58px] rounded-sm" />
 
                                 <div class="min-w-0 flex-1">
-                                    @if ($item->product?->is_active)
+                                    @if ($item->product?->isPurchasable())
                                         <a href="{{ route('products.show', $item->product) }}" wire:navigate class="text-[13.5px] font-medium hover:underline">{{ $item->product_name }}</a>
                                     @else
                                         <p class="text-[13.5px] font-medium">{{ $item->product_name }}</p>
@@ -392,7 +388,7 @@ new class extends Component
                     </div>
                     @if ((float) $order->discount_total > 0)
                         <div class="flex justify-between gap-4">
-                            <dt class="text-muted">Diskon</dt>
+                            <dt class="text-muted">Diskon{{ $order->voucher_code ? " ({$order->voucher_code})" : '' }}</dt>
                             <dd class="text-sale">&minus;Rp {{ number_format((float) $order->discount_total, 0, ',', '.') }}</dd>
                         </div>
                     @endif

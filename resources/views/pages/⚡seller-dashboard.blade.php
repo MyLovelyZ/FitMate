@@ -44,11 +44,19 @@ new #[Title('Dashboard Seller')] class extends Component
     <x-ui.area-header
         :breadcrumbs="['Beranda' => route('home'), 'Seller' => null]"
         title="Dashboard Seller"
-        :description="$this->store ? 'Toko '.$this->store->name.' · '.$this->store->statusLabel() : null"
+        :description="$this->store ? $this->store->displayName().' · '.$this->store->statusLabel() : null"
         :links="['seller.dashboard' => 'Dashboard', 'seller.products.index' => 'Produk', 'seller.orders.index' => 'Pesanan']"
     />
 
-    @if ($this->store?->status === 'suspended')
+    @if ($this->store?->needsProfile())
+        <div class="mt-6 flex flex-col items-start justify-between gap-3 rounded-md border border-ink bg-cream px-[18px] py-4 sm:flex-row sm:items-center" role="alert">
+            <div>
+                <p class="text-[13.5px] font-semibold">Pengajuan tokomu disetujui</p>
+                <p class="mt-0.5 text-[12.5px] text-muted">Lengkapi nama, deskripsi, dan kontak toko supaya produkmu tampil di katalog.</p>
+            </div>
+            <a href="{{ route('stores.create') }}" wire:navigate class="inline-flex shrink-0 items-center rounded-[2px] bg-ink px-5 py-2.5 text-[11.5px] font-bold uppercase tracking-[0.1em] text-cream transition-opacity hover:opacity-85">Lengkapi Profil</a>
+        </div>
+    @elseif ($this->store?->status === 'suspended')
         <p class="mt-6 rounded-md border border-sale/30 bg-sale/5 px-[18px] py-3.5 text-[13px] text-sale" role="alert">
             Toko ditangguhkan admin{{ $this->store->review_note ? ': '.$this->store->review_note : '.' }}
             Produkmu tidak tampil di katalog sampai toko diaktifkan lagi.

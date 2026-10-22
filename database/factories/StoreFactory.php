@@ -74,6 +74,21 @@ class StoreFactory extends Factory
     }
 
     /**
+     * Toko yang dibuat lewat alur pengajuan sekarang: profil toko baru diisi
+     * pemilik setelah disetujui admin.
+     */
+    public function withoutProfile(): static
+    {
+        return $this->state(fn (array $attributes) => [
+            'name' => null,
+            'slug' => null,
+            'description' => null,
+            'phone_number' => null,
+            'email' => null,
+        ]);
+    }
+
+    /**
      * Path foto KTP di disk privat. Filenya sendiri dibuat test lewat Storage::fake.
      */
     public function withIdentityCard(string $path = 'identity-cards/ktp.jpg'): static

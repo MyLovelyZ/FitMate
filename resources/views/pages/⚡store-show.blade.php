@@ -95,7 +95,7 @@ new class extends Component
     {
         $user = Auth::user();
 
-        return $user !== null && ($store->user_id === $user->id || $user->role === 'admin');
+        return $user !== null && ($store->user_id === $user->id || in_array($user->role, ['admin', 'superadmin'], true));
     }
 };
 ?>

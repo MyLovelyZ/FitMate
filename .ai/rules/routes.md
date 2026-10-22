@@ -24,3 +24,8 @@ Login & register ditangani komponen Livewire `pages::login`/`pages::register` â€
 
 ## Profil satu halaman untuk semua role: route `profile`
 Halaman profil adalah `pages::profile` di `/profil` (nama route `profile`, middleware `auth` saja) dan dipakai SEMUA role â€” jangan buat profil terpisah per area. Tab ukuran badan & alamat untuk akun yang `canShop()` (pembeli dan seller). Menu akun di navbar dan tab area pembeli diambil dari `User::accountLinks()`; route `user.profile` sudah dihapus.
+
+## Area admin dipakai bersama admin & superadmin, cakupannya per role
+Superadmin = admin + kewenangan tambahan. Middleware `admin` meloloskan admin DAN superadmin; halaman moderasi ada di area admin (`admin.users.*`, `admin.products.index`, `admin.vouchers.index`), bukan di `/super-admin`. Yang khusus superadmin hanya `superadmin.settings`; `superadmin.dashboard` redirect ke `admin.users.index`. Tab area dari `User::adminAreaLinks()` (superadmin dapat tambahan "Pengaturan"), jangan tulis `:links` manual.
+
+Cakupan dicek di model, bukan di route: `canModerate()` (admin hanya `User::CUSTOMER_ROLES` = user & seller; superadmin semua kecuali superadmin), `canView()` untuk membuka detail, dan ubah role hanya superadmin ke `User::ASSIGNABLE_ROLES` (user, customerservice, admin) lewat `changeRole()`. Akun yang punya toko tidak bisa diubah rolenya (`roleChangeBlocker()`).

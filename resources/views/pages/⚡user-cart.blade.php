@@ -114,17 +114,7 @@ new #[Title('Keranjang')] class extends Component
                         @foreach ($items as $item)
                             <div wire:key="item-{{ $item->id }}" class="flex items-center justify-between gap-4 border-b border-line px-[18px] py-3.5 last:border-b-0">
                                 <div class="flex min-w-0 items-center gap-3.5">
-                                    <a
-                                        href="{{ route('products.show', $item->productVariant->product) }}"
-                                        wire:navigate
-                                        class="relative h-[70px] w-14 shrink-0 overflow-hidden rounded-[2px] border border-line bg-cream"
-                                        tabindex="-1"
-                                        aria-hidden="true"
-                                    >
-                                        @if ($photo = $item->productVariant->product->primaryImage)
-                                            <img src="{{ $photo->url }}" alt="" loading="lazy" decoding="async" class="size-full object-cover">
-                                        @endif
-                                    </a>
+                                    <x-ui.product-thumb :product="$item->productVariant->product" class="h-[70px] w-14 rounded-[2px]" />
 
                                     <div class="min-w-0">
                                         <a href="{{ route('products.show', $item->productVariant->product) }}" wire:navigate class="text-[13.5px] font-medium hover:underline">

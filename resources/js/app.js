@@ -7,6 +7,23 @@ window.addEventListener('theme-changed', (event) => {
 });
 
 /**
+ * Foto tidak boleh diseret ke luar browser (di desktop itu menyimpan file gambar)
+ * atau disimpan lewat menu klik-kanan/tekan-lama. Firefox tidak mengenal
+ * `-webkit-user-drag` di app.css, jadi dragstart ikut dicegah di sini; link yang
+ * berisi foto juga, supaya kartu produk tidak terseret saat diklik sambil bergeser.
+ */
+const isPhoto = (target) =>
+    target instanceof Element && (target.matches('img') || (target.matches('a') && target.querySelector('img') !== null));
+
+['dragstart', 'contextmenu'].forEach((type) => {
+    document.addEventListener(type, (event) => {
+        if (type === 'contextmenu' ? event.target instanceof HTMLImageElement : isPhoto(event.target)) {
+            event.preventDefault();
+        }
+    });
+});
+
+/**
  * Bar loading di atas halaman (`partials/loading-bar`) selama ada request
  * Livewire — filter, paginasi, simpan form — yang lebih lama dari 200ms.
  * Perpindahan halaman lewat `wire:navigate` sudah punya progress bar bawaan

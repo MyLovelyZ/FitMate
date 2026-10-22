@@ -7,11 +7,15 @@ use Database\Factories\UserFactory;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Attributes\Hidden;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
+use LogicException;
 
 #[Fillable(['name', 'email', 'password'])]
 #[Hidden(['password', 'remember_token'])]
@@ -29,6 +33,9 @@ class User extends Authenticatable
         'gender',
         'role',
         'theme',
+        'banned_at',
+        'banned_by',
+        'ban_reason',
     ];
 
     /**
@@ -41,6 +48,7 @@ class User extends Authenticatable
         return [
             'email_verified_at' => 'datetime',
             'password' => 'hashed',
+            'banned_at' => 'datetime',
         ];
     }
 
@@ -56,6 +64,21 @@ class User extends Authenticatable
         'admin' => 'Admin',
         'superadmin' => 'Super Admin',
     ];
+
+    /**
+     * Pelanggan FitMate: yang diatur admin (blokir, hapus, lihat barangnya).
+     *
+     * @var array<int, string>
+     */
+    public const CUSTOMER_ROLES = ['user', 'seller'];
+
+    /**
+     * Role yang bisa diberikan superadmin dari halaman pengguna. `seller` mengikuti
+     * persetujuan toko dan `superadmin` hanya dibuat lewat seeder, jadi tidak ada di sini.
+     *
+     * @var array<int, string>
+     */
+    public const ASSIGNABLE_ROLES = ['user', 'customerservice', 'admin'];
 
     /**
      * Pilihan tema di profil; kuncinya sama dengan enum `users.theme`.
@@ -122,7 +145,9 @@ class User extends Authenticatable
         ];
 
         if ($this->role === 'seller') {
-            return ['Dashboard Toko' => 'seller.dashboard'] + $shopping;
+            $profile = $this->store?->needsProfile() ? ['Lengkapi Profil Toko' => 'stores.create'] : [];
+
+            return ['Dashboard Toko' => 'seller.dashboard'] + $profile + $shopping;
         }
 
         if ($this->role === 'user') {
@@ -137,6 +162,158 @@ class User extends Authenticatable
             'Dashboard' => $this->dashboardRouteName(),
             'Profil Saya' => 'profile',
         ];
+    }
+
+    public function isBanned(): bool
+    {
+        return $this->banned_at !== null;
+    }
+
+    /**
+     * Siapa boleh memblokir dan menghapus siapa. Admin hanya mengatur pelanggan
+     * dan seller. Superadmin semua akun kecuali sesama superadmin (termasuk
+     * dirinya sendiri), supaya pengelola tertinggi tidak bisa saling mengunci.
+     */
+    public function canModerate(self $target): bool
+    {
+        return match ($this->role) {
+            'superadmin' => $target->role !== 'superadmin',
+            'admin' => in_array($target->role, self::CUSTOMER_ROLES, true),
+            default => false,
+        };
+    }
+
+    /**
+     * Admin hanya bisa membuka akun pelanggan dan seller; superadmin semua akun.
+     */
+    public function canView(self $target): bool
+    {
+        return $this->role === 'superadmin' || $this->canModerate($target);
+    }
+
+    /**
+     * Alasan role akun ini tidak bisa diubah superadmin, atau null kalau bisa.
+     */
+    public function roleChangeBlocker(): ?string
+    {
+        return match (true) {
+            $this->role === 'superadmin' => 'Role superadmin tidak bisa diubah.',
+            Store::withTrashed()->whereBelongsTo($this, 'owner')->exists() => 'Akun ini punya toko, jadi rolenya mengikuti status tokonya.',
+            default => null,
+        };
+    }
+
+    /**
+     * Superadmin menaikkan pelanggan jadi admin/CS atau mengembalikannya.
+     *
+     * @throws LogicException Kalau role tidak boleh diberikan atau akun ini tidak bisa diubah.
+     */
+    public function changeRole(string $role): void
+    {
+        if (! in_array($role, self::ASSIGNABLE_ROLES, true)) {
+            throw new LogicException("Role {$role} tidak bisa diberikan dari halaman pengguna.");
+        }
+
+        if ($blocker = $this->roleChangeBlocker()) {
+            throw new LogicException($blocker);
+        }
+
+        $this->update(['role' => $role]);
+    }
+
+    /**
+     * Tab area admin. Superadmin memakai area yang sama, ditambah Pengaturan.
+     *
+     * @return array<string, string> Nama route => label.
+     */
+    public function adminAreaLinks(): array
+    {
+        $links = [
+            'admin.dashboard' => 'Dashboard',
+            'admin.stores.index' => 'Toko',
+            'admin.users.index' => 'Pengguna',
+            'admin.products.index' => 'Produk',
+            'admin.vouchers.index' => 'Kode Promo',
+        ];
+
+        return $this->role === 'superadmin' ? $links + ['superadmin.settings' => 'Pengaturan'] : $links;
+    }
+
+    /**
+     * Memblokir akun: tidak bisa masuk lagi, dan sesi yang masih terbuka
+     * dikeluarkan middleware `EnsureUserIsNotBanned`. Toko miliknya yang sedang
+     * aktif ikut ditangguhkan supaya produknya hilang dari katalog. Membuka
+     * blokir tidak mengaktifkan tokonya lagi; itu keputusan terpisah di halaman
+     * review toko.
+     */
+    public function ban(self $by, string $reason): void
+    {
+        DB::transaction(function () use ($by, $reason): void {
+            $this->update([
+                'banned_at' => now(),
+                'banned_by' => $by->id,
+                'ban_reason' => $reason,
+            ]);
+
+            if ($this->store?->status === 'active') {
+                $this->store->suspend($by, 'Pemilik toko diblokir: '.$reason);
+            }
+        });
+    }
+
+    public function unban(): void
+    {
+        $this->update([
+            'banned_at' => null,
+            'banned_by' => null,
+            'ban_reason' => null,
+        ]);
+    }
+
+    /**
+     * Alasan akun ini tidak boleh dihapus permanen, atau null kalau aman.
+     * Riwayat uang (pesanan, buku besar, penarikan, refund, sengketa) tidak boleh
+     * ikut hilang; akun seperti itu cukup diblokir.
+     */
+    public function deletionBlocker(): ?string
+    {
+        return match (true) {
+            $this->orders()->exists() => 'Akun ini punya riwayat pesanan sebagai pembeli.',
+            StoreOrder::whereHas('store', fn ($store) => $store->withTrashed()->whereBelongsTo($this, 'owner'))->exists() => 'Toko milik akun ini punya riwayat pesanan.',
+            (bool) $this->wallet?->transactions()->exists() => 'Akun ini punya riwayat saldo di dompet FitMate.',
+            Payout::whereBelongsTo($this)->exists() => 'Akun ini punya riwayat penarikan dana.',
+            Refund::where('requested_by', $this->id)->exists() || Dispute::where('opened_by', $this->id)->exists() => 'Akun ini tercatat di riwayat refund atau komplain.',
+            default => null,
+        };
+    }
+
+    /**
+     * Menghapus akun permanen beserta alamat, keranjang, toko, dan produknya
+     * (foreign key cascade). File KTP, logo toko, dan foto profil ikut dibuang.
+     *
+     * @throws LogicException Kalau akun masih punya riwayat transaksi.
+     */
+    public function deleteAccount(): void
+    {
+        if ($blocker = $this->deletionBlocker()) {
+            throw new LogicException($blocker);
+        }
+
+        $store = Store::withTrashed()->whereBelongsTo($this, 'owner')->first();
+
+        DB::transaction(fn () => $this->delete());
+
+        if ($store?->identity_card_path) {
+            Storage::disk(Store::IDENTITY_DISK)->delete($store->identity_card_path);
+        }
+
+        if ($store?->logo) {
+            Storage::disk('public')->delete($store->logo);
+        }
+
+        if ($this->profile_picture) {
+            Storage::disk('public')->delete($this->profile_picture);
+        }
     }
 
     /**
@@ -213,5 +390,10 @@ class User extends Authenticatable
     public function payoutAccounts(): HasMany
     {
         return $this->hasMany(PayoutAccount::class);
+    }
+
+    public function bannedBy(): BelongsTo
+    {
+        return $this->belongsTo(self::class, 'banned_by');
     }
 }

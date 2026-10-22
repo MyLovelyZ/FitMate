@@ -25,6 +25,9 @@ class Product extends Model
         'base_price',
         'compare_at_price',
         'is_active',
+        'banned_at',
+        'banned_by',
+        'ban_reason',
     ];
 
     /**
@@ -36,16 +39,18 @@ class Product extends Model
             'base_price' => 'decimal:2',
             'compare_at_price' => 'decimal:2',
             'is_active' => 'boolean',
+            'banned_at' => 'datetime',
         ];
     }
 
     /**
-     * Boleh dilihat dan dibeli pembeli: produknya aktif dan tokonya sedang
-     * berjualan (bukan pending, ditolak, atau ditangguhkan).
+     * Boleh dilihat dan dibeli pembeli: produknya aktif, tidak diblokir
+     * superadmin, dan tokonya sedang berjualan (bukan pending, ditolak, atau
+     * ditangguhkan).
      */
     public function isPurchasable(): bool
     {
-        return $this->is_active && (bool) $this->store?->canSell();
+        return $this->is_active && ! $this->isBanned() && (bool) $this->store?->canSell();
     }
 
     /**
@@ -56,7 +61,36 @@ class Product extends Model
     #[Scope]
     protected function purchasable(Builder $query): void
     {
-        $query->where('is_active', true)->whereHas('store', fn (Builder $store) => $store->selling());
+        $query->where('is_active', true)
+            ->whereNull('banned_at')
+            ->whereHas('store', fn (Builder $store) => $store->selling());
+    }
+
+    public function isBanned(): bool
+    {
+        return $this->banned_at !== null;
+    }
+
+    /**
+     * Superadmin menurunkan produk dari katalog. Terpisah dari `is_active` milik
+     * seller, jadi seller tidak bisa menayangkannya lagi sendiri.
+     */
+    public function ban(User $by, string $reason): void
+    {
+        $this->update([
+            'banned_at' => now(),
+            'banned_by' => $by->id,
+            'ban_reason' => $reason,
+        ]);
+    }
+
+    public function unban(): void
+    {
+        $this->update([
+            'banned_at' => null,
+            'banned_by' => null,
+            'ban_reason' => null,
+        ]);
     }
 
     /**

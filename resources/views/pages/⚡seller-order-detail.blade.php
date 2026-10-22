@@ -44,7 +44,7 @@ new class extends Component
     #[Computed]
     public function items(): Collection
     {
-        return $this->storeOrder->items()->with('product.primaryImage')->orderBy('id')->get();
+        return $this->storeOrder->items()->with(['product.primaryImage', 'product.store'])->orderBy('id')->get();
     }
 
     #[Computed]
@@ -261,14 +261,14 @@ new class extends Component
                 <ul class="divide-y divide-line">
                     @foreach ($this->items as $item)
                         <li wire:key="item-{{ $item->id }}" class="flex items-center gap-3 px-[18px] py-3.5">
-                            <div class="relative h-[72px] w-[58px] shrink-0 overflow-hidden rounded-sm border border-line bg-[linear-gradient(150deg,#d9d2c1,#b3ab98)]">
-                                @if ($image = $item->product?->primaryImage)
-                                    <img src="{{ $image->url }}" alt="" loading="lazy" decoding="async" class="size-full object-cover">
-                                @endif
-                            </div>
+                            <x-ui.product-thumb :product="$item->product" class="h-[72px] w-[58px] rounded-sm" />
 
                             <div class="min-w-0 flex-1">
-                                <p class="text-[13.5px] font-medium">{{ $item->product_name }}</p>
+                                @if ($item->product?->isPurchasable())
+                                    <a href="{{ route('products.show', $item->product) }}" wire:navigate class="text-[13.5px] font-medium hover:underline">{{ $item->product_name }}</a>
+                                @else
+                                    <p class="text-[13.5px] font-medium">{{ $item->product_name }}</p>
+                                @endif
                                 <p class="mt-0.5 text-[12px] text-muted">
                                     {{ collect([$item->size_label, $item->color_name, $item->variant_sku])->filter()->join(' · ') }}
                                     &middot; {{ $item->quantity }} &times; Rp {{ number_format((float) $item->unit_price, 0, ',', '.') }}
@@ -326,6 +326,12 @@ new class extends Component
                         <dt class="text-muted">Ongkos kirim</dt>
                         <dd>Rp {{ number_format((float) $storeOrder->shipping_cost, 0, ',', '.') }}</dd>
                     </div>
+                    @if ((float) $storeOrder->discount > 0)
+                        <div class="flex justify-between gap-4">
+                            <dt class="text-muted">Diskon voucher</dt>
+                            <dd class="text-sale">&minus;Rp {{ number_format((float) $storeOrder->discount, 0, ',', '.') }}</dd>
+                        </div>
+                    @endif
                     <div class="flex justify-between gap-4">
                         <dt class="text-muted">Komisi FitMate ({{ rtrim(rtrim(number_format((float) $storeOrder->platform_fee_rate * 100, 2), '0'), '.') }}%)</dt>
                         <dd class="text-sale">&minus;Rp {{ number_format((float) $storeOrder->platform_fee_amount, 0, ',', '.') }}</dd>

@@ -12,11 +12,12 @@ class AdminMiddleware
     /**
      * Handle an incoming request.
      *
-     * @param  \Closure(\Illuminate\Http\Request): (\Symfony\Component\HttpFoundation\Response)  $next
+     * @param  Closure(Request): (Response)  $next
      */
     public function handle(Request $request, Closure $next): Response
     {
-        if (Auth::check() && Auth::user()->role === 'admin') {
+        // Superadmin ikut masuk: dia perlu meninjau dan mengaktifkan lagi toko milik akun yang diblokir.
+        if (Auth::check() && in_array(Auth::user()->role, ['admin', 'superadmin'], true)) {
             return $next($request);
         }
 

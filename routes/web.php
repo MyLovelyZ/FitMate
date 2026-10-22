@@ -13,6 +13,9 @@ Route::livewire('/', 'pages::home')->name('home');
 Route::livewire('/produk', 'pages::catalog')->name('products.index');
 Route::livewire('/produk/{product:slug}', 'pages::detail-product')->name('products.show');
 
+// FAQ & kontak; tujuan link "FAQ" dan "Contact Us" di footer.
+Route::livewire('/bantuan', 'pages::help')->name('help');
+
 // Halaman publik tiap toko; hanya toko yang sedang berjualan.
 Route::livewire('/toko/{store:slug}', 'pages::store-show')->name('stores.show');
 
@@ -32,10 +35,9 @@ Route::post('/logout', [AuthController::class, 'logout'])
     ->name('logout');
 
 // Profil dipakai semua role; tab ukuran badan & alamat hanya muncul untuk pembeli.
-// Pengajuan toko oleh pembeli (KEP-5): form, status menunggu review, dan perbaikan setelah ditolak.
-Route::livewire('/buka-toko', 'pages::store-apply')
-    ->middleware('auth')
-    ->name('stores.create');
+// Pengajuan toko oleh pembeli (KEP-5). Halaman perkenalannya publik; formulir bertahap,
+// status review, dan profil toko setelah disetujui butuh login (dicek di komponennya).
+Route::livewire('/buka-toko', 'pages::store-apply')->name('stores.create');
 
 Route::livewire('/profil', 'pages::profile')
     ->middleware('auth')
@@ -45,12 +47,19 @@ Route::livewire('/profil', 'pages::profile')
  * Area per role. Middleware role ada di `app/Http/Middleware` dan alias-nya
  * didaftarkan di `bootstrap/app.php`.
  */
+// Dipakai bersama admin dan superadmin. Cakupannya beda per role (lihat `User::canModerate()`):
+// admin hanya mengatur pelanggan & seller, superadmin semua akun kecuali sesama superadmin.
 Route::middleware(['auth', 'admin'])->prefix('admin')->as('admin.')->group(function () {
     Route::livewire('/dashboard', 'pages::admin-dashboard')->name('dashboard');
     Route::livewire('/stores', 'pages::admin-stores')->name('stores.index');
     Route::livewire('/stores/{store}', 'pages::admin-store-review')->name('stores.show');
     // Foto KTP ada di disk privat, jadi dialirkan lewat controller khusus admin.
     Route::get('/stores/{store}/identity-card', StoreIdentityCardController::class)->name('stores.identity-card');
+    Route::livewire('/users', 'pages::admin-users')->name('users.index');
+    Route::livewire('/users/{user}', 'pages::admin-user-detail')->name('users.show');
+    // Semua produk dari semua toko, termasuk yang nonaktif, diblokir, dan dihapus.
+    Route::livewire('/products', 'pages::admin-products')->name('products.index');
+    Route::livewire('/vouchers', 'pages::admin-vouchers')->name('vouchers.index');
 });
 
 Route::middleware(['auth', 'cs'])->prefix('cs')->as('cs.')->group(function () {
@@ -66,9 +75,9 @@ Route::middleware(['auth', 'seller'])->prefix('seller')->as('seller.')->group(fu
     Route::livewire('/orders/{storeOrder:store_order_number}', 'pages::seller-order-detail')->name('orders.show');
 });
 
+// Superadmin bekerja di area admin dengan cakupan penuh; yang khusus superadmin hanya pengaturan.
 Route::middleware(['auth', 'superadmin'])->prefix('super-admin')->as('superadmin.')->group(function () {
-    Route::redirect('/dashboard', '/super-admin/users')->name('dashboard');
-    Route::livewire('/users', 'pages::superadmin-users')->name('users.index');
+    Route::redirect('/dashboard', '/admin/users')->name('dashboard');
     Route::livewire('/settings', 'pages::superadmin-settings')->name('settings');
 });
 

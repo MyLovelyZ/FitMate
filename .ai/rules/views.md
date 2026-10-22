@@ -35,3 +35,8 @@ Font di-self-host lewat `bunny()` di `vite.config.js`, bukan `<link>` Google Fon
 Tema disimpan di `users.theme` (light|dark|system, pilihan di tab "Tampilan" profil) dan dirender ke `<html data-theme="{{ App\Models\User::themeFor(auth()->user()) }}">` di KEDUA layout. `system` ditangani CSS (prefers-color-scheme), jadi tidak ada script anti-kedip. Jangan set tema lewat class `dark` via JS: wire:navigate menimpa atribut `<html>` dengan versi server.
 
 Mode gelap bekerja dengan menimpa token (`bg`, `surface`, `ink`, `muted`, `line`, `cream`, `sale`, `success`) di `resources/css/app.css`, jadi view cukup pakai token itu — tanpa `dark:` per elemen, dan jangan hardcode hex/`bg-white`. `bg-ink text-cream` otomatis jadi tombol terang. Elemen di atas foto yang harus tetap krem (hero home) pakai utility `on-photo`.
+
+## Foto produk selalu jadi link ke halaman produk; link #anchor tanpa wire:navigate
+Thumbnail produk di daftar (keranjang, checkout, pesanan, produk seller) pakai `<x-ui.product-thumb :product="..." class="h-.. w-.. rounded-.." />`: otomatis link ke `products.show` selama `isPurchasable()`, dan jadi `<div>` biasa kalau produknya sudah tidak dijual (halaman detailnya 404). Grid katalog pakai `x-ui.product-card`. Jangan render `<img>` produk polos di luar link.
+
+app.css membuat `a img { pointer-events: none }` dan app.js memblok dragstart/klik-kanan di foto, supaya menyentuh foto membuka link-nya, bukan menu "Download gambar". Link ke `#anchor` di halaman lain (mis. `route('home').'#ethos'`, `route('help').'#kontak'`) jangan diberi `wire:navigate` — Livewire tidak menggulir ke anchor setelah navigasi.

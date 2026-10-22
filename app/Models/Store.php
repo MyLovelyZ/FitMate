@@ -85,10 +85,36 @@ class Store extends Model
     /**
      * Toko baru boleh berjualan setelah diverifikasi. Sebagai pihak ketiga yang
      * menahan uang pembeli, kita ngk boleh menerima order dari toko yang belum jelas.
+     * Toko yang sudah disetujui juga wajib melengkapi profilnya dulu.
      */
     public function canSell(): bool
     {
-        return $this->status === 'active' && $this->verified_at !== null;
+        return $this->status === 'active' && $this->verified_at !== null && $this->hasProfile();
+    }
+
+    /**
+     * Profil toko (nama, slug, deskripsi, kontak, logo) baru diisi pemilik
+     * setelah pengajuan disetujui; sebelum itu `name` dan `slug` masih kosong.
+     */
+    public function hasProfile(): bool
+    {
+        return $this->name !== null;
+    }
+
+    /**
+     * Toko yang sudah disetujui tapi profilnya belum diisi pemilik.
+     */
+    public function needsProfile(): bool
+    {
+        return $this->status === 'active' && ! $this->hasProfile();
+    }
+
+    /**
+     * Nama untuk admin dan pemilik, termasuk pengajuan yang profilnya belum diisi.
+     */
+    public function displayName(): string
+    {
+        return $this->name ?? 'Calon toko '.($this->identity_name ?? $this->owner?->name);
     }
 
     public function statusLabel(): string
@@ -116,7 +142,8 @@ class Store extends Model
      * Admin menyetujui pengajuan: toko aktif, pemiliknya jadi seller, dan rekening
      * pencairan default ikut ditandai terverifikasi karena sudah dicek admin saat
      * review (pencairan hanya boleh ke rekening terverifikasi). Pemilik tetap bisa
-     * belanja (lihat `User::canShop()`).
+     * belanja (lihat `User::canShop()`). Toko baru tampil di katalog setelah
+     * pemiliknya melengkapi profil di halaman Buka Toko (`needsProfile()`).
      */
     public function approve(User $admin): void
     {
@@ -195,7 +222,7 @@ class Store extends Model
     #[Scope]
     protected function selling(Builder $query): void
     {
-        $query->where('status', 'active')->whereNotNull('verified_at');
+        $query->where('status', 'active')->whereNotNull('verified_at')->whereNotNull('name');
     }
 
     // relationships

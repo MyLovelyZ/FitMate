@@ -75,6 +75,21 @@
     --color-cream: #fbfaf7;
 }
 
+/* Foto tidak bisa diseret keluar atau disimpan lewat tekan-lama (iOS). Foto di dalam
+   link meneruskan sentuhan ke link-nya, jadi menyentuh foto produk membuka halaman
+   produk — bukan menu "Download gambar". Klik kanan diblok di resources/js/app.js. */
+@layer base {
+    img {
+        -webkit-user-drag: none;
+        -webkit-touch-callout: none;
+        user-select: none;
+    }
+
+    a img {
+        pointer-events: none;
+    }
+}
+
 /* Menyembunyikan elemen Alpine (x-show, x-transition) sebelum Alpine selesai dimuat. */
 [x-cloak] {
     display: none !important;

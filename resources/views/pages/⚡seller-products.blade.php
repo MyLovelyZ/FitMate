@@ -29,7 +29,7 @@ new #[Title('Produk Saya')] class extends Component
     #[Computed]
     public function products(): LengthAwarePaginator
     {
-        return Product::with(['category', 'primaryImage'])
+        return Product::with(['category', 'primaryImage', 'store'])
             ->withCount('variants')
             ->withSum('variants', 'stock')
             ->where('store_id', Auth::user()->store?->id ?? 0)
@@ -79,11 +79,7 @@ new #[Title('Produk Saya')] class extends Component
                         <tr wire:key="product-{{ $product->id }}" class="border-t border-line">
                             <td class="px-[18px] py-3 font-medium">
                                 <div class="flex items-center gap-3">
-                                    <span class="relative h-12 w-[38px] shrink-0 overflow-hidden rounded-[2px] border border-line bg-cream">
-                                        @if ($product->primaryImage)
-                                            <img src="{{ $product->primaryImage->url }}" alt="" loading="lazy" decoding="async" class="size-full object-cover">
-                                        @endif
-                                    </span>
+                                    <x-ui.product-thumb :product="$product" class="h-12 w-[38px] rounded-[2px]" />
 
                                     <a href="{{ route('products.show', $product) }}" wire:navigate class="hover:underline">{{ $product->name }}</a>
                                 </div>
@@ -93,7 +89,12 @@ new #[Title('Produk Saya')] class extends Component
                             <td class="px-[18px] py-3">{{ $product->variants_count }}</td>
                             <td class="px-[18px] py-3">{{ (int) $product->variants_sum_stock }}</td>
                             <td class="px-[18px] py-3">
-                                <span class="rounded-[3px] bg-cream px-2 py-0.5 text-[11px] font-semibold">{{ $product->is_active ? 'Aktif' : 'Nonaktif' }}</span>
+                                @if ($product->isBanned())
+                                    <span class="rounded-[3px] bg-sale/10 px-2 py-0.5 text-[11px] font-semibold text-sale">Diblokir FitMate</span>
+                                    <p class="mt-1 max-w-[220px] text-[11.5px] text-muted">{{ $product->ban_reason }}</p>
+                                @else
+                                    <span class="rounded-[3px] bg-cream px-2 py-0.5 text-[11px] font-semibold">{{ $product->is_active ? 'Aktif' : 'Nonaktif' }}</span>
+                                @endif
                             </td>
                         </tr>
                     @endforeach

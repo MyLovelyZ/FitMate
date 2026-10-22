@@ -10,6 +10,7 @@
 
 use App\Models\Product;
 use App\Models\ProductVariant;
+use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 
 uses(RefreshDatabase::class);
@@ -21,6 +22,8 @@ it('bisa merender semua halaman', function (string $name) {
     'products.index',
     'login',
     'register',
+    'help',
+    'stores.create',
 ]);
 
 it('bisa merender halaman yang butuh parameter route', function () {
@@ -29,3 +32,38 @@ it('bisa merender halaman yang butuh parameter route', function () {
 
     $this->get(route('products.show', $product))->assertOk();
 });
+
+/**
+ * Link internal di HTML (tanpa bagian #anchor), selain aset dan form logout.
+ *
+ * @return array<int, string>
+ */
+function internalLinks(string $html): array
+{
+    preg_match_all('/href="([^"#]*)/', $html, $matches);
+
+    return collect($matches[1])
+        ->map(fn (string $url): string => html_entity_decode($url))
+        ->filter(fn (string $url): bool => str_starts_with($url, url('/')))
+        ->reject(fn (string $url): bool => str_contains($url, '/build/') || str_ends_with($url, '.ico'))
+        ->unique()
+        ->values()
+        ->all();
+}
+
+it('tidak punya link internal yang rusak di halaman publik', function (?string $role) {
+    $product = Product::factory()->create();
+    ProductVariant::factory()->create(['product_id' => $product->id]);
+
+    if ($role) {
+        $this->actingAs(User::factory()->create(['role' => $role]));
+    }
+
+    $pages = [route('home'), route('products.index'), route('products.show', $product), route('stores.show', $product->store)];
+
+    foreach ($pages as $page) {
+        foreach (internalLinks($this->get($page)->getContent()) as $link) {
+            expect($this->get($link)->getStatusCode())->toBeLessThan(400, "Link {$link} di {$page} rusak.");
+        }
+    }
+})->with(['tamu' => null, 'pembeli' => 'user', 'seller' => 'seller', 'cs' => 'customerservice', 'admin' => 'admin', 'superadmin' => 'superadmin']);

@@ -8,6 +8,7 @@
 use App\Models\Order;
 use App\Models\OrderItem;
 use App\Models\Payment;
+use App\Models\Product;
 use App\Models\Shipment;
 use App\Models\StoreOrder;
 use App\Models\User;
@@ -163,4 +164,24 @@ it('keeps guests and staff away from order tracking', function () {
     $this->actingAs(User::factory()->customerService()->create())
         ->get(route('user.orders.show', $order))
         ->assertRedirect('/');
+});
+
+it('opens the product page when a product photo in the order is tapped', function () {
+    $buyer = User::factory()->create();
+    $order = buyerOrder($buyer, 'paid');
+    $product = Product::factory()->create();
+    $order->items()->first()->update(['product_id' => $product->id]);
+
+    $productLink = 'href="'.route('products.show', $product).'"';
+
+    $this->actingAs($buyer)
+        ->get(route('user.orders.show', $order))
+        ->assertSee($productLink, false);
+
+    // Produk yang sudah tidak dijual tidak punya halaman, jadi fotonya bukan link.
+    $product->update(['is_active' => false]);
+
+    $this->actingAs($buyer)
+        ->get(route('user.orders.show', $order))
+        ->assertDontSee($productLink, false);
 });

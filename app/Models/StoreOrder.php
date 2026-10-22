@@ -113,13 +113,16 @@ class StoreOrder extends Model
      * Dipanggil dari `Order::placeFromCart()` di dalam transaksinya; varian
      * sudah dikunci dan sudah dicek stoknya di sana.
      *
+     * `$discount` = bagian diskon voucher untuk paket ini. Total paket (dasar
+     * komisi, escrow, dan refund) adalah yang benar-benar dibayar pembeli.
+     *
      * @param  Collection<int, CartItem>  $items
      */
-    public static function openFor(Order $order, Collection $items, string $shippingOption): self
+    public static function openFor(Order $order, Collection $items, string $shippingOption, float $discount = 0): self
     {
         $shipping = Shipment::OPTIONS[$shippingOption];
         $subtotal = $items->sum(fn (CartItem $item): float => $item->lineTotal());
-        $total = $subtotal + $shipping['cost'];
+        $total = $subtotal + $shipping['cost'] - $discount;
         $fee = round($total * self::PLATFORM_FEE_RATE, 2);
 
         $storeOrder = $order->storeOrders()->create([
@@ -127,6 +130,7 @@ class StoreOrder extends Model
             'store_order_number' => Order::newNumber('SO'),
             'subtotal' => $subtotal,
             'shipping_cost' => $shipping['cost'],
+            'discount' => $discount,
             'total' => $total,
             'platform_fee_rate' => self::PLATFORM_FEE_RATE,
             'platform_fee_amount' => $fee,

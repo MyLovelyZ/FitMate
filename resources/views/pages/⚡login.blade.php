@@ -35,6 +35,16 @@ new #[Layout('layouts::auth')] #[Title('Masuk')] class extends Component
         }
 
         RateLimiter::clear($this->throttleKey());
+
+        if (Auth::user()->isBanned()) {
+            $reason = Auth::user()->ban_reason;
+            Auth::logout();
+
+            throw ValidationException::withMessages([
+                'email' => 'Akun ini diblokir oleh FitMate: '.$reason,
+            ]);
+        }
+
         session()->regenerate();
 
         $this->redirectIntended($this->defaultRedirectUrl(), navigate: true);
@@ -76,6 +86,11 @@ new #[Layout('layouts::auth')] #[Title('Masuk')] class extends Component
 <div>
     <h1 class="font-display text-[28px] font-normal leading-tight">Masuk</h1>
     <p class="mt-1.5 text-[13px] text-muted">Lanjutkan belanja dan lihat rekomendasi ukuranmu.</p>
+
+    {{-- Dari middleware EnsureUserIsNotBanned saat sesi akun yang diblokir dikeluarkan. --}}
+    @if (session('status'))
+        <p class="mt-5 rounded-[2px] border border-sale/30 bg-sale/5 px-3.5 py-3 text-[12.5px] text-sale" role="alert">{{ session('status') }}</p>
+    @endif
 
     <form wire:submit="login" class="mt-7 flex flex-col gap-4">
         <x-ui.input

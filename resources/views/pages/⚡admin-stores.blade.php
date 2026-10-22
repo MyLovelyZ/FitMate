@@ -94,7 +94,7 @@ new #[Title('Pengajuan & Toko')] class extends Component
         :breadcrumbs="['Beranda' => route('home'), 'Admin' => route('admin.dashboard'), 'Toko' => null]"
         title="Pengajuan & Toko"
         description="Tinjau pengajuan toko baru dan kelola toko yang sudah berjalan."
-        :links="['admin.dashboard' => 'Dashboard', 'admin.stores.index' => 'Toko']"
+        :links="auth()->user()->adminAreaLinks()"
     />
 
     <div class="mt-6 flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
@@ -157,10 +157,10 @@ new #[Title('Pengajuan & Toko')] class extends Component
                                         @if ($store->logo)
                                             <img src="{{ asset('storage/'.$store->logo) }}" alt="" loading="lazy" class="size-full object-cover">
                                         @else
-                                            {{ str($store->name)->substr(0, 1)->upper() }}
+                                            {{ str($store->displayName())->substr(0, 1)->upper() }}
                                         @endif
                                     </span>
-                                    <span class="font-medium">{{ $store->name }}</span>
+                                    <span @class(['font-medium', 'text-muted' => ! $store->hasProfile()])>{{ $store->displayName() }}</span>
                                 </div>
                             </td>
                             <td class="px-[18px] py-3">
