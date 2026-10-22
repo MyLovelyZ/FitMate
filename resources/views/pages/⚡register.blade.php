@@ -35,10 +35,10 @@ new #[Layout('layouts::auth')] #[Title('Daftar')] class extends Component
 ?>
 
 <div>
-    <h1 class="text-2xl font-semibold tracking-tight text-navy-second">Buat Akun</h1>
-    <p class="mt-1 text-sm text-abu-second">Simpan ukuran badanmu sekali, pakai di semua produk.</p>
+    <h1 class="font-display text-[28px] font-normal leading-tight">Buat Akun</h1>
+    <p class="mt-1.5 text-[13px] text-muted">Simpan ukuran badanmu sekali, pakai di semua produk.</p>
 
-    <form wire:submit="register" class="mt-6 space-y-4">
+    <form wire:submit="register" class="mt-7 flex flex-col gap-4">
         <x-ui.input
             name="name"
             label="Nama Lengkap"
@@ -72,16 +72,11 @@ new #[Layout('layouts::auth')] #[Title('Daftar')] class extends Component
             autocomplete="new-password"
         />
 
-        <x-ui.button>
-            <span wire:loading.remove wire:target="register">Daftar</span>
-            <span wire:loading wire:target="register">Memproses…</span>
-        </x-ui.button>
+        <x-ui.button target="register" class="mt-2">Daftar</x-ui.button>
     </form>
 
-    <p class="mt-6 text-center text-sm text-abu-second">
+    <p class="mt-6 text-center text-[13px] text-muted">
         Sudah punya akun?
-        <a href="{{ route('login') }}" wire:navigate class="font-medium text-brand-600 hover:underline">
-            Masuk di sini
-        </a>
+        <a href="{{ route('login') }}" wire:navigate class="font-semibold text-ink underline-offset-4 hover:underline">Masuk</a>
     </p>
 </div>

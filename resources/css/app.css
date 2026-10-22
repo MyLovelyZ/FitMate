@@ -29,11 +29,50 @@
     --color-line: rgba(10, 25, 47, 0.12);
     --color-cream: #fbfaf7;
     --color-sale: #a4432c;
+    --color-success: #3d6b4f; /* status pesanan "Selesai" */
 
     /* Padding samping yang ikut lebar layar + tinggi header tetap, dipakai lewat
        utility px-side / top-header / h-header. */
     --spacing-side: clamp(20px, 5vw, 64px);
     --spacing-header: 76px;
+}
+
+/* Tema dari preferensi profil (`users.theme`) yang dirender ke `<html data-theme>`.
+   `system` mengikuti pengaturan perangkat, jadi tidak butuh JavaScript saat halaman dimuat. */
+@custom-variant dark {
+    &:where([data-theme='dark'], [data-theme='dark'] *) {
+        @slot;
+    }
+
+    @media (prefers-color-scheme: dark) {
+        &:where([data-theme='system'], [data-theme='system'] *) {
+            @slot;
+        }
+    }
+}
+
+/* Palet Estética versi gelap. Token yang sama ditimpa, jadi view cukup memakai
+   `bg-bg`, `text-ink`, dst. tanpa `dark:` di setiap elemen. `bg-ink text-cream`
+   otomatis terbalik jadi tombol terang. */
+:root {
+    @variant dark {
+        color-scheme: dark;
+
+        --color-bg: #0b1424;
+        --color-surface: #111c2f;
+        --color-ink: #f1ede4;
+        --color-muted: #9aa2b1;
+        --color-line: rgba(241, 237, 228, 0.13);
+        --color-cream: #0e182a;
+        --color-sale: #e07b62;
+        --color-success: #7fb391;
+    }
+}
+
+/* Teks dan tombol di atas foto (hero) tetap krem/navy di kedua tema. */
+@utility on-photo {
+    --color-ink: #0a192f;
+    --color-cream: #fbfaf7;
 }
 
 /* Menyembunyikan elemen Alpine (x-show, x-transition) sebelum Alpine selesai dimuat. */

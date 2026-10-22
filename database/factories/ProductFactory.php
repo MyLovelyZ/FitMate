@@ -28,9 +28,31 @@ class ProductFactory extends Factory
             'name' => Str::title($name),
             'slug' => Str::slug($name),
             'description' => fake()->paragraph(),
+            'gender' => 'unisex',
             'base_price' => fake()->numberBetween(50, 2000) * 1000,
+            'compare_at_price' => null,
             'is_active' => true,
         ];
+    }
+
+    public function men(): static
+    {
+        return $this->state(fn (array $attributes) => ['gender' => 'men']);
+    }
+
+    public function women(): static
+    {
+        return $this->state(fn (array $attributes) => ['gender' => 'women']);
+    }
+
+    /**
+     * Harga coret 25% di atas harga jual.
+     */
+    public function onSale(): static
+    {
+        return $this->state(fn (array $attributes) => [
+            'compare_at_price' => round($attributes['base_price'] * 1.25, -3),
+        ]);
     }
 
     public function inactive(): static

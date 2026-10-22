@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Controllers\AuthController;
+use App\Http\Controllers\StoreIdentityCardController;
 use Illuminate\Support\Facades\Route;
 
 /**
@@ -12,47 +13,67 @@ Route::livewire('/', 'pages::home')->name('home');
 Route::livewire('/produk', 'pages::catalog')->name('products.index');
 Route::livewire('/produk/{product:slug}', 'pages::detail-product')->name('products.show');
 
-Route::livewire('/checkout', 'pages::checkout')->name('checkout');
-Route::livewire('/checkout/success', 'pages::checkout-success')->name('checkout.success');
+// Halaman publik tiap toko; hanya toko yang sedang berjualan.
+Route::livewire('/toko/{store:slug}', 'pages::store-show')->name('stores.show');
+
+// Checkout memakai keranjang, jadi hanya untuk akun yang boleh belanja (alias `user`).
+Route::middleware(['auth', 'user'])->group(function () {
+    Route::livewire('/checkout', 'pages::checkout')->name('checkout');
+    Route::livewire('/checkout/success/{order:order_number}', 'pages::checkout-success')->name('checkout.success');
+});
 
 Route::middleware('guest')->group(function () {
     Route::livewire('/login', 'pages::login')->name('login');
     Route::livewire('/register', 'pages::register')->name('register');
 });
 
-Route::post('/login', [LoginController::class, 'login'])->name('login.store');
-    Route::post('/register', [RegisterController::class, 'register'])->name('register.store');
-
 Route::post('/logout', [AuthController::class, 'logout'])
     ->middleware('auth')
     ->name('logout');
 
+// Profil dipakai semua role; tab ukuran badan & alamat hanya muncul untuk pembeli.
+// Pengajuan toko oleh pembeli (KEP-5): form, status menunggu review, dan perbaikan setelah ditolak.
+Route::livewire('/buka-toko', 'pages::store-apply')
+    ->middleware('auth')
+    ->name('stores.create');
 
-    Route::middleware(['auth', 'admin'])->group(function () {
-    Route::get('/admin/dashboard', [AdminController::class, 'index'])->name('admin.dashboard');
+Route::livewire('/profil', 'pages::profile')
+    ->middleware('auth')
+    ->name('profile');
+
+/**
+ * Area per role. Middleware role ada di `app/Http/Middleware` dan alias-nya
+ * didaftarkan di `bootstrap/app.php`.
+ */
+Route::middleware(['auth', 'admin'])->prefix('admin')->as('admin.')->group(function () {
+    Route::livewire('/dashboard', 'pages::admin-dashboard')->name('dashboard');
+    Route::livewire('/stores', 'pages::admin-stores')->name('stores.index');
+    Route::livewire('/stores/{store}', 'pages::admin-store-review')->name('stores.show');
+    // Foto KTP ada di disk privat, jadi dialirkan lewat controller khusus admin.
+    Route::get('/stores/{store}/identity-card', StoreIdentityCardController::class)->name('stores.identity-card');
 });
 
 Route::middleware(['auth', 'cs'])->prefix('cs')->as('cs.')->group(function () {
-    // Dashboard CS / Tiket Bantuan / Live Chat Support
-    Route::livewire('/dashboard', 'pages::cs.dashboard')->name('dashboard');
-    Route::livewire('/chats', 'pages::cs.chats.index')->name('chats.index');
-    Route::livewire('/tickets', 'pages::cs.tickets.index')->name('tickets.index');
+    Route::livewire('/dashboard', 'pages::cs-dashboard')->name('dashboard');
+    Route::livewire('/chats', 'pages::cs-chats')->name('chats.index');
+    Route::livewire('/tickets', 'pages::cs-tickets')->name('tickets.index');
 });
 
-Route::middleware(['auth', 'seller'])->prefix('seller')->as('seller. ')->group(function () {
-    Route::livewire('/dashboard', 'pages::seller.dashboard')->name('dashboard');
-    Route::livewire('/products', 'pages::seller.products.index')->name('products.index');
-    Route::livewire('/orders', 'pages::seller.orders.index')->name('orders.index');
+Route::middleware(['auth', 'seller'])->prefix('seller')->as('seller.')->group(function () {
+    Route::livewire('/dashboard', 'pages::seller-dashboard')->name('dashboard');
+    Route::livewire('/products', 'pages::seller-products')->name('products.index');
+    Route::livewire('/orders', 'pages::seller-orders')->name('orders.index');
+    Route::livewire('/orders/{storeOrder:store_order_number}', 'pages::seller-order-detail')->name('orders.show');
 });
 
-Route::middleware(['auth', 'superadmin'])->prefix('super-admin')->as('superadmin.')->group(function (){
-    Route::livewire('/dashboard', 'pages::superadmin.users.index')->name('dashboard');
-    Route::livewire('/users', 'pages::superadmin.users.index')->name('users.index');
-    Route::livewire('/settings', 'pages::superadmin.settings')->name('settings');
+Route::middleware(['auth', 'superadmin'])->prefix('super-admin')->as('superadmin.')->group(function () {
+    Route::redirect('/dashboard', '/super-admin/users')->name('dashboard');
+    Route::livewire('/users', 'pages::superadmin-users')->name('users.index');
+    Route::livewire('/settings', 'pages::superadmin-settings')->name('settings');
 });
 
-Route::middleware(['auth', 'user'])->prefix('user')->as('user. ')->group(function (){
-    Route::livewire('/profile', 'pages::user.profile')->name('name');
-    Route::livewire('/orders', 'pages::user.orders')->name('user.orders');
-    Route::livewire('cart', 'pages::user.cart')->name('user.cart');
+Route::middleware(['auth', 'user'])->prefix('user')->as('user.')->group(function () {
+    Route::livewire('/orders', 'pages::user-orders')->name('orders');
+    Route::livewire('/orders/{order:order_number}', 'pages::user-order-detail')->name('orders.show');
+    Route::livewire('/cart', 'pages::user-cart')->name('cart');
 });

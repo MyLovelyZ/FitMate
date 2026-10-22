@@ -12,13 +12,13 @@ class CustomerServiceMiddleware
     /**
      * Handle an incoming request.
      *
-     * @param  \Closure(\Illuminate\Http\Request): (\Symfony\Component\HttpFoundation\Response)  $next
+     * @param  Closure(Request): (Response)  $next
      */
     public function handle(Request $request, Closure $next): Response
     {
         // 1. Cek apakah user sudah login
-        // 2. Izinkan jika role user adalah 'cs' ATAU 'admin'
-        if (Auth::check() && in_array(Auth::user()->role, ['cs', 'customer_service', 'admin'])) {
+        // 2. Izinkan jika role user adalah 'customerservice' ATAU 'admin'
+        if (Auth::check() && in_array(Auth::user()->role, ['customerservice', 'admin'])) {
             return $next($request);
         }
 

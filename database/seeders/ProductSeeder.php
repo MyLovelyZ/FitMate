@@ -5,6 +5,7 @@ namespace Database\Seeders;
 use App\Models\Category;
 use App\Models\Color;
 use App\Models\Product;
+use App\Models\ProductImage;
 use App\Models\ProductVariant;
 use App\Models\Size;
 use App\Models\Store;
@@ -21,26 +22,27 @@ class ProductSeeder extends Seeder
      * Varian sengaja dibentuk dari ukuran milik jenis kategori produknya sendiri,
      * bukan ukuran acak, supaya rekomendasi ukuran bisa langsung dicoba.
      *
-     * Slug kategori => daftar [nama produk, harga dasar].
+     * Slug kategori => daftar [nama produk, harga jual, gender, harga coret].
+     * Harga coret diisi hanya untuk produk yang sedang diskon (menu "On Sale").
      *
-     * @var array<string, array<int, array{0: string, 1: int}>>
+     * @var array<string, array<int, array{0: string, 1: int, 2: string, 3: int|null}>>
      */
     private const PRODUCTS = [
-        'kaos' => [['Kaos Katun Basic', 129000], ['Kaos Oversized Archive', 159000]],
-        'kemeja' => [['Kemeja Oxford Lengan Panjang', 259000], ['Kemeja Linen Santai', 289000]],
-        'jaket' => [['Jaket Bomber Ringan', 449000], ['Jaket Denim Trucker', 529000]],
-        'hoodie' => [['Hoodie Fleece Polos', 319000], ['Hoodie Zip-Up Archive', 379000]],
-        'sweater' => [['Sweater Rajut Rib', 299000], ['Sweater Crewneck Basic', 269000]],
-        'celana-jeans' => [['Celana Jeans Slim Fit', 399000], ['Celana Jeans Straight', 429000]],
-        'celana-chino' => [['Celana Chino Tapered', 349000], ['Celana Chino Klasik', 329000]],
-        'celana-pendek' => [['Celana Pendek Katun', 199000], ['Celana Pendek Cargo', 239000]],
-        'rok' => [['Rok Plisket Midi', 289000], ['Rok A-Line Denim', 309000]],
-        'sepatu-sneakers' => [['Sneakers Kanvas Low', 549000], ['Sneakers Runner Mesh', 699000]],
-        'sepatu-formal' => [['Sepatu Derby Kulit', 899000], ['Sepatu Loafer Kulit', 849000]],
-        'sandal' => [['Sandal Slide Karet', 189000], ['Sandal Gunung Strap', 259000]],
-        'tas' => [['Tas Selempang Kanvas', 279000], ['Tas Ransel Daypack', 459000]],
-        'topi' => [['Topi Baseball Katun', 149000], ['Topi Bucket Twill', 169000]],
-        'ikat-pinggang' => [['Ikat Pinggang Kulit', 219000], ['Ikat Pinggang Anyam', 189000]],
+        'kaos' => [['Kaos Katun Basic', 129000, 'men', null], ['Kaos Oversized Archive', 159000, 'women', 199000]],
+        'kemeja' => [['Kemeja Oxford Lengan Panjang', 259000, 'men', null], ['Kemeja Linen Santai', 289000, 'women', null]],
+        'jaket' => [['Jaket Bomber Ringan', 449000, 'men', 559000], ['Jaket Denim Trucker', 529000, 'unisex', null]],
+        'hoodie' => [['Hoodie Fleece Polos', 319000, 'unisex', null], ['Hoodie Zip-Up Archive', 379000, 'men', null]],
+        'sweater' => [['Sweater Rajut Rib', 299000, 'women', 369000], ['Sweater Crewneck Basic', 269000, 'unisex', null]],
+        'celana-jeans' => [['Celana Jeans Slim Fit', 399000, 'men', null], ['Celana Jeans Straight', 429000, 'women', null]],
+        'celana-chino' => [['Celana Chino Tapered', 349000, 'men', 429000], ['Celana Chino Klasik', 329000, 'men', null]],
+        'celana-pendek' => [['Celana Pendek Katun', 199000, 'women', null], ['Celana Pendek Cargo', 239000, 'men', null]],
+        'rok' => [['Rok Plisket Midi', 289000, 'women', 349000], ['Rok A-Line Denim', 309000, 'women', null]],
+        'sepatu-sneakers' => [['Sneakers Kanvas Low', 549000, 'unisex', 649000], ['Sneakers Runner Mesh', 699000, 'unisex', null]],
+        'sepatu-formal' => [['Sepatu Derby Kulit', 899000, 'men', null], ['Sepatu Loafer Kulit', 849000, 'women', null]],
+        'sandal' => [['Sandal Slide Karet', 189000, 'unisex', null], ['Sandal Gunung Strap', 259000, 'unisex', null]],
+        'tas' => [['Tas Selempang Kanvas', 279000, 'unisex', 339000], ['Tas Ransel Daypack', 459000, 'unisex', null]],
+        'topi' => [['Topi Baseball Katun', 149000, 'unisex', null], ['Topi Bucket Twill', 169000, 'unisex', null]],
+        'ikat-pinggang' => [['Ikat Pinggang Kulit', 219000, 'men', null], ['Ikat Pinggang Anyam', 189000, 'women', 229000]],
     ];
 
     public function run(): void
@@ -63,7 +65,7 @@ class ProductSeeder extends Seeder
             $category = Category::with('categoryType')->where('slug', $categorySlug)->firstOrFail();
             $sizes = $this->sizesFor($category);
 
-            foreach ($items as $index => [$name, $basePrice]) {
+            foreach ($items as $index => [$name, $basePrice, $gender, $compareAtPrice]) {
                 // Produk dibagi rata ke tiap toko supaya katalognya terlihat
                 // sebagai marketplace, bukan satu toko besar.
                 $store = $stores[$productNumber++ % $stores->count()];
@@ -75,7 +77,9 @@ class ProductSeeder extends Seeder
                         'category_id' => $category->id,
                         'name' => $name,
                         'description' => $this->describe($name, $category->name),
+                        'gender' => $gender,
                         'base_price' => $basePrice,
+                        'compare_at_price' => $compareAtPrice,
                         'is_active' => true,
                     ]
                 );
@@ -87,8 +91,38 @@ class ProductSeeder extends Seeder
                 ];
 
                 $this->seedVariants($product, $sizes, $productColors);
+                $this->seedImages($product);
             }
         }
+    }
+
+    /**
+     * Foto demo diambil dari file `public/images/products/{slug}-{n}.webp`; foto
+     * nomor 1 jadi gambar utama di katalog. Nambah foto cukup taruh file baru
+     * dengan nomor berikutnya, lalu jalankan seeder lagi.
+     */
+    private function seedImages(Product $product): void
+    {
+        $pattern = '/^'.preg_quote($product->slug, '/').'-\d+\.webp$/';
+
+        $paths = collect(glob(public_path('images/products/'.$product->slug.'-*.webp')))
+            ->map(fn (string $file): string => basename($file))
+            ->filter(fn (string $file): bool => preg_match($pattern, $file) === 1)
+            ->sort(SORT_NATURAL)
+            ->map(fn (string $file): string => 'images/products/'.$file)
+            ->values();
+
+        foreach ($paths as $index => $path) {
+            ProductImage::updateOrCreate(
+                ['product_id' => $product->id, 'sort_order' => $index],
+                ['path' => $path, 'alt_text' => $product->name, 'is_primary' => $index === 0]
+            );
+        }
+
+        // Foto yang filenya sudah dihapus ikut dibuang supaya seeder aman diulang.
+        ProductImage::where('product_id', $product->id)
+            ->where('sort_order', '>=', $paths->count())
+            ->delete();
     }
 
     /**

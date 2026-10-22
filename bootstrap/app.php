@@ -1,5 +1,10 @@
 <?php
 
+use App\Http\Middleware\AdminMiddleware;
+use App\Http\Middleware\CustomerServiceMiddleware;
+use App\Http\Middleware\SellerMiddleware;
+use App\Http\Middleware\SuperAdminMiddleware;
+use App\Http\Middleware\UserMiddleware;
 use Illuminate\Foundation\Application;
 use Illuminate\Foundation\Configuration\Exceptions;
 use Illuminate\Foundation\Configuration\Middleware;
@@ -14,12 +19,12 @@ return Application::configure(basePath: dirname(__DIR__))
     )
     ->withMiddleware(function (Middleware $middleware): void {
         $middleware->alias([
-        'admin' => \App\Http\Middleware\AdminMiddleware::class,
-        'cs'=>\App\Http\Middleware\CustomerServiceMiddleware::class,
-        'seller'=>\App\Http\Middleware\SellerMiddleware::class,
-        'super_admin'=>\App\Http\Middleware\SuperAdminMiddleware::class,
-        'user'=>\App\Http\Middleware\UserMiddleware::class,
-    ]);
+            'admin' => AdminMiddleware::class,
+            'cs' => CustomerServiceMiddleware::class,
+            'seller' => SellerMiddleware::class,
+            'superadmin' => SuperAdminMiddleware::class,
+            'user' => UserMiddleware::class,
+        ]);
     })
     ->withExceptions(function (Exceptions $exceptions): void {
         $exceptions->shouldRenderJsonWhen(

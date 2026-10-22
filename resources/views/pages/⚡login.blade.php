@@ -37,7 +37,19 @@ new #[Layout('layouts::auth')] #[Title('Masuk')] class extends Component
         RateLimiter::clear($this->throttleKey());
         session()->regenerate();
 
-        $this->redirectIntended(route('home'), navigate: true);
+        $this->redirectIntended($this->defaultRedirectUrl(), navigate: true);
+    }
+
+    /**
+     * Pembeli kembali ke beranda, staf langsung ke dashboard role masing-masing.
+     */
+    protected function defaultRedirectUrl(): string
+    {
+        $user = Auth::user();
+
+        return $user->role === 'user'
+            ? route('home')
+            : route($user->dashboardRouteName());
     }
 
     /**
@@ -62,10 +74,10 @@ new #[Layout('layouts::auth')] #[Title('Masuk')] class extends Component
 ?>
 
 <div>
-    <h1 class="text-2xl font-semibold tracking-tight text-navy-second">Masuk</h1>
-    <p class="mt-1 text-sm text-abu-second">Lanjutkan belanja dan lihat rekomendasi ukuranmu.</p>
+    <h1 class="font-display text-[28px] font-normal leading-tight">Masuk</h1>
+    <p class="mt-1.5 text-[13px] text-muted">Lanjutkan belanja dan lihat rekomendasi ukuranmu.</p>
 
-    <form wire:submit="login" class="mt-6 space-y-4">
+    <form wire:submit="login" class="mt-7 flex flex-col gap-4">
         <x-ui.input
             name="email"
             label="Email"
@@ -83,25 +95,16 @@ new #[Layout('layouts::auth')] #[Title('Masuk')] class extends Component
             autocomplete="current-password"
         />
 
-        <label class="flex items-center gap-2 text-sm text-abu-second">
-            <input
-                type="checkbox"
-                wire:model="remember"
-                class="size-4 rounded border-abu-second/60 text-brand-600 focus:ring-brand-200"
-            >
+        <label class="flex w-fit cursor-pointer items-center gap-2 text-[13px] text-muted">
+            <input type="checkbox" wire:model="remember" class="size-4 accent-ink">
             Ingat saya
         </label>
 
-        <x-ui.button>
-            <span wire:loading.remove wire:target="login">Masuk</span>
-            <span wire:loading wire:target="login">Memproses…</span>
-        </x-ui.button>
+        <x-ui.button target="login" class="mt-2">Masuk</x-ui.button>
     </form>
 
-    <p class="mt-6 text-center text-sm text-abu-second">
+    <p class="mt-6 text-center text-[13px] text-muted">
         Belum punya akun?
-        <a href="{{ route('register') }}" wire:navigate class="font-medium text-brand-600 hover:underline">
-            Daftar di sini
-        </a>
+        <a href="{{ route('register') }}" wire:navigate class="font-semibold text-ink underline-offset-4 hover:underline">Daftar</a>
     </p>
 </div>

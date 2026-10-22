@@ -1,25 +1,27 @@
 <?php
 
-use Illuminate\Support\Carbon;
+use App\Models\Order;
+use App\Models\Shipment;
+use Illuminate\Support\Facades\Auth;
 use Livewire\Attributes\Computed;
 use Livewire\Attributes\Title;
 use Livewire\Component;
 
-new #[Title('Payment Successful')] class extends Component
+new #[Title('Pembayaran Berhasil')] class extends Component
 {
-    /**
-     * Ringkasan pesanan hasil flash dari halaman checkout.
-     *
-     * Halaman ini juga bisa dibuka langsung (mis. lewat riwayat browser), jadi
-     * nilai contoh dipakai saat flash session sudah tidak ada.
-     *
-     * @var array{id: string, placed_at: string, total: float, email: string, delivery_window: string}
-     */
-    public array $order = [];
+    public Order $order;
 
-    public function mount(): void
+    public function mount(Order $order): void
     {
-        $this->order = session('checkout.order', $this->placeholderOrder());
+        // 404, bukan 403: pembeli lain tidak perlu tahu nomor pesanan itu ada.
+        abort_unless($order->user_id === Auth::id(), 404);
+
+        $this->order = $order;
+
+        // Belum lunas (atau batal): tempatnya di halaman pesanan, bukan di sini.
+        if (! $order->isPaid()) {
+            $this->redirectRoute('user.orders.show', $order, navigate: true);
+        }
     }
 
     /**
@@ -31,24 +33,27 @@ new #[Title('Payment Successful')] class extends Component
     public function details(): array
     {
         return [
-            'Order ID' => '#'.$this->order['id'],
-            'Date' => $this->order['placed_at'],
-            'Total Amount' => '$'.number_format((float) $this->order['total'], 2),
+            'No. Pesanan' => $this->order->order_number,
+            'Dibayar' => $this->order->paid_at?->format('d M Y, H:i') ?? '-',
+            'Total' => 'Rp '.number_format((float) $this->order->grand_total, 0, ',', '.'),
         ];
     }
 
     /**
-     * @return array{id: string, placed_at: string, total: float, email: string, delivery_window: string}
+     * Estimasi tiba dari layanan kurir yang dipilih saat checkout.
      */
-    protected function placeholderOrder(): array
+    #[Computed]
+    public function deliveryEstimate(): ?string
     {
-        return [
-            'id' => 'FM-'.Carbon::now()->format('Y').'-0000',
-            'placed_at' => Carbon::now()->format('M j, Y'),
-            'total' => 900.00,
-            'email' => '',
-            'delivery_window' => Carbon::now()->addDays(5)->format('F j').'–'.Carbon::now()->addDays(7)->format('j, Y'),
-        ];
+        $shipment = $this->order->storeOrders()->with('shipment')->first()?->shipment;
+
+        foreach (Shipment::OPTIONS as $option) {
+            if ($shipment && $option['courier'] === $shipment->courier && $option['service'] === $shipment->service) {
+                return $option['label'].' · '.$option['eta'].' setelah penjual mengirim paket';
+            }
+        }
+
+        return null;
     }
 };
 ?>
@@ -61,13 +66,9 @@ new #[Title('Payment Successful')] class extends Component
             </svg>
         </div>
 
-        <h1 class="font-display text-[clamp(1.5rem,3.2vw,2rem)] font-normal leading-tight">Payment Successful</h1>
+        <h1 class="font-display text-[clamp(1.5rem,3.2vw,2rem)] font-normal leading-tight">Pembayaran Berhasil</h1>
 
-        <p class="mt-2 text-[13px] text-muted">Your order has been confirmed and is now being processed.</p>
-
-        @if ($order['email'] !== '')
-            <p class="mt-1 text-[12px] text-muted">A receipt has been sent to {{ $order['email'] }}.</p>
-        @endif
+        <p class="mt-2 text-[13px] text-muted">Penjual sudah bisa memproses pesananmu. Dana ditahan FitMate sampai paket kamu terima.</p>
     </section>
 
     <section class="mt-[clamp(28px,5vw,40px)] rounded-md border border-line bg-surface">
@@ -79,30 +80,32 @@ new #[Title('Payment Successful')] class extends Component
         @endforeach
     </section>
 
-    <section class="mt-4 flex flex-col gap-1 rounded-md bg-cream px-[18px] py-4">
-        <strong class="flex items-center gap-2 text-[12px] font-semibold">
-            <span class="inline-block size-2 border border-ink bg-ink/20" aria-hidden="true"></span>
-            Estimated Delivery
-        </strong>
+    @if ($this->deliveryEstimate)
+        <section class="mt-4 flex flex-col gap-1 rounded-md bg-cream px-[18px] py-4">
+            <strong class="flex items-center gap-2 text-[12px] font-semibold">
+                <span class="inline-block size-2 border border-ink bg-ink/20" aria-hidden="true"></span>
+                Estimasi Pengiriman
+            </strong>
 
-        <span class="text-[12px] text-muted">{{ $order['delivery_window'] }}</span>
-    </section>
+            <span class="text-[12px] text-muted">{{ $this->deliveryEstimate }}</span>
+        </section>
+    @endif
 
     <div class="mt-5 flex flex-col justify-center gap-2.5 sm:flex-row">
         <a
-            href="{{ route('home') }}"
+            href="{{ route('user.orders.show', $order) }}"
             wire:navigate
             class="inline-flex min-w-[150px] items-center justify-center rounded-[2px] bg-ink px-5 py-3 text-[11.5px] font-bold uppercase tracking-[0.1em] text-cream transition-opacity duration-200 hover:opacity-85"
         >
-            Back to Home
+            Lihat Pesanan
         </a>
 
         <a
-            href="{{ route('checkout') }}"
+            href="{{ route('products.index') }}"
             wire:navigate
             class="inline-flex min-w-[150px] items-center justify-center rounded-[2px] border border-line bg-surface px-5 py-3 text-[11.5px] font-bold uppercase tracking-[0.1em] transition-colors hover:border-ink"
         >
-            View Order Details
+            Lanjut Belanja
         </a>
     </div>
 </div>

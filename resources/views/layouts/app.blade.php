@@ -1,10 +1,11 @@
 <!DOCTYPE html>
-<html lang="{{ str_replace('_', '-', app()->getLocale()) }}" class="h-full scroll-smooth">
+<html lang="{{ str_replace('_', '-', app()->getLocale()) }}" class="h-full scroll-smooth" data-theme="{{ App\Models\User::themeFor(auth()->user()) }}">
     <head>
         @include('partials.head')
     </head>
 
     <body class="flex min-h-full flex-col bg-bg font-sans text-base leading-normal text-ink antialiased">
+        @include('partials.loading-bar')
         @include('partials.navbar')
 
         <main id="main" class="flex-1">
@@ -18,6 +19,7 @@
                 <nav aria-label="Footer">
                     <ul class="flex list-none flex-wrap justify-center gap-x-7 gap-y-5">
                         <li><a class="text-[13px] text-muted hover:text-ink" href="{{ route('products.index') }}" wire:navigate>Collections</a></li>
+                        <li><a class="text-[13px] text-muted hover:text-ink" href="{{ route('stores.create') }}" wire:navigate>Buka Toko</a></li>
                         <li><a class="text-[13px] text-muted hover:text-ink" href="{{ route('home') }}#ethos">About</a></li>
                         <li><a class="text-[13px] text-muted hover:text-ink" href="{{ route('home') }}#ethos">FAQ</a></li>
                         <li><a class="text-[13px] text-muted hover:text-ink" href="{{ route('home') }}#ethos">Contact Us</a></li>
@@ -29,6 +31,8 @@
                 </p>
             </div>
         </footer>
+
+        @include('partials.toast')
 
         @livewireScripts
     </body>
