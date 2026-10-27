@@ -2,6 +2,7 @@
 
 use App\Http\Middleware\AdminMiddleware;
 use App\Http\Middleware\CustomerServiceMiddleware;
+use App\Http\Middleware\EnsureUserIsNotBanned;
 use App\Http\Middleware\SellerMiddleware;
 use App\Http\Middleware\SuperAdminMiddleware;
 use App\Http\Middleware\UserMiddleware;
@@ -18,6 +19,10 @@ return Application::configure(basePath: dirname(__DIR__))
         health: '/up',
     )
     ->withMiddleware(function (Middleware $middleware): void {
+        $middleware->web(append: [
+            EnsureUserIsNotBanned::class,
+        ]);
+
         $middleware->alias([
             'admin' => AdminMiddleware::class,
             'cs' => CustomerServiceMiddleware::class,

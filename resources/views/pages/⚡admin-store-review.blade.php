@@ -54,7 +54,7 @@ new class extends Component
 
         $this->store->approve(Auth::user());
 
-        $this->dispatch('notify', message: "{$this->store->name} disetujui dan sekarang aktif.");
+        $this->dispatch('notify', message: "{$this->store->displayName()} disetujui. Pemilik tinggal melengkapi profil toko.");
     }
 
     public function reject(): void
@@ -87,12 +87,12 @@ new class extends Component
 
         $this->store->reactivate(Auth::user());
 
-        $this->dispatch('notify', message: "{$this->store->name} aktif kembali.");
+        $this->dispatch('notify', message: "{$this->store->displayName()} aktif kembali.");
     }
 
     public function render(): View
     {
-        return $this->view()->title('Tinjau '.$this->store->name);
+        return $this->view()->title('Tinjau '.$this->store->displayName());
     }
 };
 ?>
@@ -102,23 +102,23 @@ new class extends Component
         'Beranda' => route('home'),
         'Admin' => route('admin.dashboard'),
         'Toko' => route('admin.stores.index', ['status' => $store->status]),
-        $store->name => null,
+        $store->displayName() => null,
     ]" />
 
     <header class="mt-4 flex flex-wrap items-end justify-between gap-4 border-b border-line pb-5">
         <div class="flex items-center gap-4">
             <span class="flex size-16 shrink-0 items-center justify-center overflow-hidden rounded-full border border-line bg-cream font-display text-2xl">
                 @if ($store->logoUrl())
-                    <img src="{{ $store->logoUrl() }}" alt="Logo {{ $store->name }}" class="size-full object-cover">
+                    <img src="{{ $store->logoUrl() }}" alt="Logo {{ $store->displayName() }}" class="size-full object-cover">
                 @else
-                    {{ str($store->name)->substr(0, 1)->upper() }}
+                    {{ str($store->displayName())->substr(0, 1)->upper() }}
                 @endif
             </span>
             <div>
-                <h1 class="font-display text-[clamp(1.5rem,3.2vw,2rem)] font-normal leading-tight">{{ $store->name }}</h1>
+                <h1 class="font-display text-[clamp(1.5rem,3.2vw,2rem)] font-normal leading-tight">{{ $store->displayName() }}</h1>
                 <p class="mt-1 text-[12.5px] text-muted">
                     Diajukan {{ $store->submitted_at?->format('d M Y, H:i') ?? $store->created_at->format('d M Y') }}
-                    &middot; /toko/{{ $store->slug }}
+                    &middot; {{ $store->slug ? '/toko/'.$store->slug : 'Profil toko diisi setelah disetujui' }}
                 </p>
             </div>
         </div>
@@ -134,12 +134,19 @@ new class extends Component
     <div class="mt-6 grid grid-cols-1 items-start gap-6 lg:grid-cols-[minmax(0,1fr)_340px]">
         <div class="flex flex-col gap-4">
             <section class="rounded-md border border-line bg-surface px-[clamp(18px,3vw,28px)] py-5">
-                <h2 class="text-[12px] font-semibold uppercase tracking-[0.1em]">Profil Toko</h2>
-                <p class="mt-3 whitespace-pre-line text-[13px] leading-relaxed">{{ $store->description }}</p>
+                <h2 class="text-[12px] font-semibold uppercase tracking-[0.1em]">{{ $store->hasProfile() ? 'Profil Toko' : 'Alamat Asal Pengiriman' }}</h2>
+
+                @if ($store->hasProfile())
+                    <p class="mt-3 whitespace-pre-line text-[13px] leading-relaxed">{{ $store->description }}</p>
+                @else
+                    <p class="mt-2 text-[12.5px] text-muted">Nama, deskripsi, kontak, dan logo toko diisi pemilik setelah pengajuan ini disetujui.</p>
+                @endif
 
                 <dl class="mt-4 grid gap-x-6 gap-y-3 border-t border-line pt-4 text-[12.5px] sm:grid-cols-2">
-                    <div><dt class="text-muted">Telepon</dt><dd class="font-medium">{{ $store->phone_number ?? '—' }}</dd></div>
-                    <div><dt class="text-muted">Email</dt><dd class="font-medium">{{ $store->email ?? '—' }}</dd></div>
+                    @if ($store->hasProfile())
+                        <div><dt class="text-muted">Telepon</dt><dd class="font-medium">{{ $store->phone_number ?? '—' }}</dd></div>
+                        <div><dt class="text-muted">Email</dt><dd class="font-medium">{{ $store->email ?? '—' }}</dd></div>
+                    @endif
                     <div class="sm:col-span-2">
                         <dt class="text-muted">Alamat asal pengiriman</dt>
                         <dd class="font-medium">{{ collect([$store->street, $store->city, $store->province, $store->postal_code])->filter()->join(', ') ?: '—' }}</dd>
@@ -225,13 +232,13 @@ new class extends Component
 
                 @if (in_array($store->status, ['pending', 'rejected'], true))
                     <p class="mt-2 text-[12.5px] text-muted">
-                        {{ $store->status === 'rejected' ? 'Pengajuan ini sudah ditolak. Kamu tetap bisa menyetujuinya kalau datanya ternyata sudah benar.' : 'Periksa profil, KTP, dan rekening sebelum memutuskan.' }}
+                        {{ $store->status === 'rejected' ? 'Pengajuan ini sudah ditolak. Kamu tetap bisa menyetujuinya kalau datanya ternyata sudah benar.' : 'Periksa alamat, KTP, dan rekening sebelum memutuskan.' }}
                     </p>
 
                     <button
                         type="button"
                         wire:click="approve"
-                        wire:confirm="Setujui {{ $store->name }}? Pemiliknya langsung bisa berjualan."
+                        wire:confirm="Setujui {{ $store->displayName() }}? Pemiliknya lalu melengkapi profil toko sebelum mulai berjualan."
                         class="mt-4 inline-flex h-11 w-full cursor-pointer items-center justify-center rounded-[2px] bg-ink px-5 text-[11.5px] font-bold uppercase tracking-[0.1em] text-cream transition-opacity hover:opacity-85 data-loading:opacity-60"
                     >
                         Setujui Toko
@@ -266,7 +273,7 @@ new class extends Component
                     <button
                         type="button"
                         wire:click="reactivate"
-                        wire:confirm="Aktifkan kembali {{ $store->name }}?"
+                        wire:confirm="Aktifkan kembali {{ $store->displayName() }}?"
                         class="mt-4 inline-flex h-11 w-full cursor-pointer items-center justify-center rounded-[2px] bg-ink px-5 text-[11.5px] font-bold uppercase tracking-[0.1em] text-cream transition-opacity hover:opacity-85 data-loading:opacity-60"
                     >
                         Aktifkan Kembali

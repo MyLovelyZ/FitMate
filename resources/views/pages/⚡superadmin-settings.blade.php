@@ -36,7 +36,7 @@ new #[Title('Pengaturan')] class extends Component
         :breadcrumbs="['Beranda' => route('home'), 'Super Admin' => route('superadmin.dashboard'), 'Pengaturan' => null]"
         title="Pengaturan"
         description="Konfigurasi aplikasi saat ini. Ubah lewat file .env."
-        :links="['superadmin.users.index' => 'Pengguna', 'superadmin.settings' => 'Pengaturan']"
+        :links="auth()->user()->adminAreaLinks()"
     />
 
     <section class="mt-6 max-w-[800px] rounded-md border border-line bg-surface">

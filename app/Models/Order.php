@@ -10,6 +10,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\HasManyThrough;
 use Illuminate\Database\Eloquent\Relations\HasOne;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
@@ -36,6 +37,8 @@ class Order extends Model
         'shipping_country',
         'subtotal',
         'shipping_total',
+        'voucher_id',
+        'voucher_code',
         'discount_total',
         'grand_total',
         'status',
@@ -103,9 +106,13 @@ class Order extends Model
      * dalam satu transaksi. Baris varian dikunci supaya dua pembeli tidak
      * sama-sama mendapatkan barang terakhir.
      *
+     * Kode promo dicek ulang dengan baris voucher dikunci supaya kuotanya tidak
+     * terpakai lebih dari batas. Potongannya dibagi ke paket sebanding subtotal
+     * barang (`splitDiscount()`), jadi total semua paket = yang dibayar pembeli.
+     *
      * @param  array{recipient_name: string, recipient_phone: string, street: string, city: string, state: string, postal_code: string}  $address
      *
-     * @throws ValidationException Kunci `cart`: keranjang kosong atau ada barang yang tidak bisa dibeli.
+     * @throws ValidationException Kunci `cart`: keranjang kosong atau ada barang yang tidak bisa dibeli. Kunci `voucher`: kode promo tidak bisa dipakai.
      */
     public static function placeFromCart(
         User $buyer,
@@ -114,8 +121,9 @@ class Order extends Model
         string $paymentMethod,
         ?string $vaBank = null,
         ?string $note = null,
+        ?string $voucherCode = null,
     ): self {
-        return DB::transaction(function () use ($buyer, $address, $shippingOption, $paymentMethod, $vaBank, $note): self {
+        return DB::transaction(function () use ($buyer, $address, $shippingOption, $paymentMethod, $vaBank, $note, $voucherCode): self {
             $items = CartItem::query()
                 ->whereHas('cart', fn (Builder $cart) => $cart->whereBelongsTo($buyer))
                 ->orderBy('id')
@@ -143,6 +151,25 @@ class Order extends Model
             $subtotal = $items->sum(fn (CartItem $item): float => $item->lineTotal());
             $shippingTotal = Shipment::OPTIONS[$shippingOption]['cost'] * $packages->count();
 
+            $voucher = null;
+            $discountTotal = 0.0;
+
+            if (filled($voucherCode)) {
+                $voucher = Voucher::query()->withCode($voucherCode)->lockForUpdate()->first();
+                $problem = $voucher === null ? 'Kode promo tidak ditemukan.' : $voucher->redeemProblem($buyer, $subtotal);
+
+                if ($problem !== null) {
+                    throw ValidationException::withMessages(['voucher' => $problem]);
+                }
+
+                $discountTotal = $voucher->discountFor($subtotal);
+            }
+
+            $packageDiscounts = self::splitDiscount(
+                $discountTotal,
+                $packages->map(fn ($package): float => $package->sum(fn (CartItem $item): float => $item->lineTotal())),
+            );
+
             $order = static::create([
                 'user_id' => $buyer->id,
                 'order_number' => self::newNumber('ORD'),
@@ -155,15 +182,18 @@ class Order extends Model
                 'shipping_country' => 'Indonesia',
                 'subtotal' => $subtotal,
                 'shipping_total' => $shippingTotal,
-                'grand_total' => $subtotal + $shippingTotal,
+                'voucher_id' => $voucher?->id,
+                'voucher_code' => $voucher?->code,
+                'discount_total' => $discountTotal,
+                'grand_total' => $subtotal + $shippingTotal - $discountTotal,
                 'status' => 'pending_payment',
                 'note' => $note ?: null,
                 'placed_at' => now(),
                 'expires_at' => now()->addHours(self::PAYMENT_WINDOW_HOURS),
             ]);
 
-            foreach ($packages as $package) {
-                StoreOrder::openFor($order, $package, $shippingOption);
+            foreach ($packages as $storeId => $package) {
+                StoreOrder::openFor($order, $package, $shippingOption, $packageDiscounts[$storeId]);
             }
 
             Payment::issueFor($order, $paymentMethod, $vaBank);
@@ -171,6 +201,32 @@ class Order extends Model
             CartItem::whereKey($items->modelKeys())->delete();
 
             return $order;
+        });
+    }
+
+    /**
+     * Membagi diskon voucher ke paket sebanding subtotal barangnya, dibulatkan
+     * ke bawah ke rupiah penuh. Sisa pembulatan masuk ke paket terakhir supaya
+     * jumlahnya tepat sama dengan `discount_total`.
+     *
+     * @param  Collection<int, float>  $subtotals  store_id => subtotal barang
+     * @return Collection<int, float> store_id => diskon
+     */
+    public static function splitDiscount(float $discount, Collection $subtotals): Collection
+    {
+        if ($discount <= 0) {
+            return $subtotals->map(fn (): float => 0.0);
+        }
+
+        $total = $subtotals->sum();
+        $lastStoreId = $subtotals->keys()->last();
+        $remaining = $discount;
+
+        return $subtotals->map(function (float $subtotal, int $storeId) use ($discount, $total, $lastStoreId, &$remaining): float {
+            $share = $storeId === $lastStoreId ? $remaining : floor($discount * $subtotal / $total);
+            $remaining -= $share;
+
+            return $share;
         });
     }
 
@@ -296,6 +352,11 @@ class Order extends Model
     public function user(): BelongsTo
     {
         return $this->belongsTo(User::class);
+    }
+
+    public function voucher(): BelongsTo
+    {
+        return $this->belongsTo(Voucher::class);
     }
 
     public function storeOrders(): HasMany

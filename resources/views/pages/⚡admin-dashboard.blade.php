@@ -49,7 +49,7 @@ new #[Title('Dashboard Admin')] class extends Component
         :breadcrumbs="['Beranda' => route('home'), 'Admin' => null]"
         title="Dashboard Admin"
         description="Ringkasan marketplace FitMate."
-        :links="['admin.dashboard' => 'Dashboard', 'admin.stores.index' => 'Toko']"
+        :links="auth()->user()->adminAreaLinks()"
     />
 
     {{-- Hitungan agregat dimuat lazy supaya kerangka halaman tampil lebih dulu. --}}
@@ -97,7 +97,7 @@ new #[Title('Dashboard Admin')] class extends Component
                     <tbody>
                         @foreach ($this->pendingStores as $store)
                             <tr wire:key="store-{{ $store->id }}" class="border-t border-line">
-                                <td class="px-[18px] py-3 font-medium">{{ $store->name }}</td>
+                                <td class="px-[18px] py-3 font-medium">{{ $store->displayName() }}</td>
                                 <td class="px-[18px] py-3">{{ $store->owner?->name }}</td>
                                 <td class="px-[18px] py-3 text-muted">{{ $store->city ?? '—' }}</td>
                                 <td class="px-[18px] py-3 text-muted">{{ ($store->submitted_at ?? $store->created_at)->format('d M Y') }}</td>

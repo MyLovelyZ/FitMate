@@ -21,13 +21,17 @@ uses(RefreshDatabase::class);
 
 dataset('role pages', [
     'admin dashboard' => ['admin', 'admin.dashboard'],
+    'admin users' => ['admin', 'admin.users.index'],
+    'admin products' => ['admin', 'admin.products.index'],
+    'admin vouchers' => ['admin', 'admin.vouchers.index'],
+    'superadmin in admin users' => ['superAdmin', 'admin.users.index'],
+    'superadmin in admin vouchers' => ['superAdmin', 'admin.vouchers.index'],
     'cs dashboard' => ['customerService', 'cs.dashboard'],
     'cs chats' => ['customerService', 'cs.chats.index'],
     'cs tickets' => ['customerService', 'cs.tickets.index'],
     'seller dashboard' => ['seller', 'seller.dashboard'],
     'seller products' => ['seller', 'seller.products.index'],
     'seller orders' => ['seller', 'seller.orders.index'],
-    'superadmin users' => ['superAdmin', 'superadmin.users.index'],
     'superadmin settings' => ['superAdmin', 'superadmin.settings'],
     'user orders' => [null, 'user.orders'],
     'user cart' => [null, 'user.cart'],
@@ -48,7 +52,13 @@ it('keeps other roles out of a role area', function (string $routeName) {
     $buyer = User::factory()->create();
 
     $this->actingAs($buyer)->get(route($routeName))->assertRedirect('/');
-})->with(['admin.dashboard', 'cs.dashboard', 'seller.dashboard', 'superadmin.users.index']);
+})->with(['admin.dashboard', 'admin.users.index', 'admin.products.index', 'admin.vouchers.index', 'cs.dashboard', 'seller.dashboard', 'superadmin.settings']);
+
+it('keeps admins out of the superadmin settings', function () {
+    $this->actingAs(User::factory()->admin()->create())
+        ->get(route('superadmin.settings'))
+        ->assertRedirect('/');
+});
 
 it('keeps staff out of the buyer area', function () {
     $this->actingAs(User::factory()->customerService()->create())
@@ -59,7 +69,7 @@ it('keeps staff out of the buyer area', function () {
 it('redirects the superadmin dashboard to the user list', function () {
     $this->actingAs(User::factory()->superAdmin()->create())
         ->get(route('superadmin.dashboard'))
-        ->assertRedirect(route('superadmin.users.index'));
+        ->assertRedirect(route('admin.users.index'));
 });
 
 it('sends each role to its own dashboard after login', function (?string $state, string $routeName) {

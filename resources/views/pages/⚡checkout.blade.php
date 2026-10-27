@@ -4,6 +4,7 @@ use App\Models\CartItem;
 use App\Models\Order;
 use App\Models\Payment;
 use App\Models\Shipment;
+use App\Models\Voucher;
 use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Str;
@@ -42,6 +43,12 @@ new #[Title('Checkout')] class extends Component
     public string $vaBank = 'bca';
 
     public string $note = '';
+
+    /** Isi kotak "Kode promo" sebelum ditukar. */
+    public string $voucherCode = '';
+
+    /** Kode yang sudah lolos pengecekan; dicek ulang saat pesanan dibuat. */
+    public ?string $appliedVoucherCode = null;
 
     public function mount(): void
     {
@@ -127,9 +134,73 @@ new #[Title('Checkout')] class extends Component
     }
 
     #[Computed]
+    public function voucher(): ?Voucher
+    {
+        return $this->appliedVoucherCode === null
+            ? null
+            : Voucher::query()->withCode($this->appliedVoucherCode)->first();
+    }
+
+    /**
+     * Kode yang sudah ditukar bisa gugur sebelum pesanan dibuat (kuota habis,
+     * kedaluwarsa, dinonaktifkan admin).
+     */
+    #[Computed]
+    public function voucherProblem(): ?string
+    {
+        if ($this->appliedVoucherCode === null) {
+            return null;
+        }
+
+        if ($this->voucher === null) {
+            return 'Kode promo tidak ditemukan.';
+        }
+
+        return $this->voucher->redeemProblem(Auth::user(), $this->subtotal);
+    }
+
+    #[Computed]
+    public function discount(): float
+    {
+        return $this->voucher && ! $this->voucherProblem ? $this->voucher->discountFor($this->subtotal) : 0;
+    }
+
+    #[Computed]
     public function total(): float
     {
-        return $this->subtotal + $this->shippingTotal;
+        return $this->subtotal + $this->shippingTotal - $this->discount;
+    }
+
+    public function applyVoucher(): void
+    {
+        $this->resetErrorBag(['voucherCode', 'voucher']);
+
+        if (blank($this->voucherCode)) {
+            $this->addError('voucherCode', 'Masukkan kode promo.');
+
+            return;
+        }
+
+        $voucher = Voucher::query()->withCode($this->voucherCode)->first();
+        $problem = $voucher === null ? 'Kode promo tidak ditemukan.' : $voucher->redeemProblem(Auth::user(), $this->subtotal);
+
+        if ($problem !== null) {
+            $this->addError('voucherCode', $problem);
+
+            return;
+        }
+
+        $this->appliedVoucherCode = $voucher->code;
+        $this->voucherCode = '';
+
+        $saving = number_format($voucher->discountFor($this->subtotal), 0, ',', '.');
+        $this->dispatch('notify', message: "Kode promo {$voucher->code} dipakai. Kamu hemat Rp {$saving}.");
+    }
+
+    public function removeVoucher(): void
+    {
+        $this->appliedVoucherCode = null;
+        $this->resetErrorBag(['voucherCode', 'voucher']);
     }
 
     public function placeOrder(): void
@@ -145,6 +216,7 @@ new #[Title('Checkout')] class extends Component
             paymentMethod: $this->paymentMethod,
             vaBank: $this->paymentMethod === 'virtual_account' ? $this->vaBank : null,
             note: $this->note,
+            voucherCode: $this->appliedVoucherCode,
         );
 
         if ($this->saveAddress && ! $this->hasDefaultAddress) {
@@ -371,7 +443,7 @@ new #[Title('Checkout')] class extends Component
 
                 <button
                     type="submit"
-                    @disabled($this->problems)
+                    @disabled($this->problems || $this->voucherProblem)
                     class="inline-flex h-11 w-full cursor-pointer items-center justify-center gap-2 rounded-[2px] bg-ink text-[11.5px] font-bold uppercase tracking-[0.1em] text-cream transition-opacity duration-200 hover:opacity-85 disabled:cursor-not-allowed disabled:opacity-60"
                 >
                     <svg wire:loading wire:target="placeOrder" class="size-4 animate-spin" viewBox="0 0 24 24" fill="none" aria-hidden="true">
@@ -399,14 +471,10 @@ new #[Title('Checkout')] class extends Component
                     @foreach ($package as $item)
                         @php($variant = $item->productVariant)
                         <div wire:key="item-{{ $item->id }}" class="mb-3 flex gap-3">
-                            <div class="relative h-[70px] w-[55px] shrink-0 overflow-hidden rounded-[2px] border border-line bg-[linear-gradient(150deg,#cbc4b5,#948d7c)]">
-                                @if ($image = $variant->product->primaryImage)
-                                    <img src="{{ $image->url }}" alt="" loading="lazy" decoding="async" class="size-full object-cover">
-                                @endif
-                            </div>
+                            <x-ui.product-thumb :product="$variant->product" class="h-[70px] w-[55px] rounded-[2px]" />
 
                             <div class="min-w-0">
-                                <p class="text-[12px] font-semibold leading-snug">{{ $variant->product->name }}</p>
+                                <a href="{{ route('products.show', $variant->product) }}" wire:navigate class="text-[12px] font-semibold leading-snug hover:underline">{{ $variant->product->name }}</a>
                                 <p class="mt-1 text-[11px] text-muted">
                                     {{ collect([$variant->size?->name, $variant->color?->name])->filter()->join(' · ') }} &middot; {{ $item->quantity }} &times;
                                 </p>
@@ -417,6 +485,56 @@ new #[Title('Checkout')] class extends Component
                 </div>
             @endforeach
 
+            {{-- Kode promo --}}
+            <div class="mb-4 border-b border-line pb-4">
+                @if ($appliedVoucherCode)
+                    <div class="flex items-center justify-between gap-3 rounded-[2px] border border-dashed border-ink bg-cream px-3 py-2.5">
+                        <div class="min-w-0">
+                            <p class="text-[12px] font-bold tracking-[0.08em]">{{ $appliedVoucherCode }}</p>
+                            @if ($this->voucher)
+                                <p class="mt-0.5 truncate text-[11px] text-muted">{{ $this->voucher->name }}</p>
+                            @endif
+                        </div>
+                        <button type="button" wire:click="removeVoucher" class="shrink-0 cursor-pointer text-[11px] font-semibold text-muted underline-offset-4 transition-colors hover:text-ink hover:underline">
+                            Hapus
+                        </button>
+                    </div>
+
+                    @if ($voucherError = $this->voucherProblem ?? $errors->first('voucher'))
+                        <p class="mt-1.5 text-[11.5px] text-sale" role="alert">{{ $voucherError }}</p>
+                    @endif
+                @else
+                    <form wire:submit="applyVoucher" class="flex gap-2" novalidate>
+                        <label for="voucherCode" class="sr-only">Kode promo</label>
+                        <input
+                            id="voucherCode"
+                            type="text"
+                            wire:model="voucherCode"
+                            value="{{ $voucherCode }}"
+                            maxlength="32"
+                            autocomplete="off"
+                            placeholder="Punya kode promo?"
+                            @class([
+                                'h-10 min-w-0 flex-1 rounded-[2px] border bg-surface px-3 text-[12.5px] uppercase tracking-[0.06em] outline-none transition-colors placeholder:normal-case placeholder:tracking-normal focus:border-ink',
+                                'border-sale' => $errors->has('voucherCode'),
+                                'border-line' => ! $errors->has('voucherCode'),
+                            ])
+                        >
+                        <button
+                            type="submit"
+                            class="inline-flex h-10 shrink-0 cursor-pointer items-center rounded-[2px] border border-ink px-4 text-[10.5px] font-bold uppercase tracking-[0.1em] transition-colors hover:bg-ink hover:text-cream"
+                        >
+                            <span wire:loading.remove wire:target="applyVoucher">Pakai</span>
+                            <span wire:loading wire:target="applyVoucher">…</span>
+                        </button>
+                    </form>
+
+                    @error('voucherCode')
+                        <p class="mt-1.5 text-[11.5px] text-sale" role="alert">{{ $message }}</p>
+                    @enderror
+                @endif
+            </div>
+
             <div class="flex justify-between text-[12px]">
                 <span class="text-muted">Subtotal</span>
                 <span class="font-medium">Rp {{ number_format($this->subtotal, 0, ',', '.') }}</span>
@@ -426,6 +544,13 @@ new #[Title('Checkout')] class extends Component
                 <span class="text-muted">Ongkir ({{ $this->packages->count() }} paket)</span>
                 <span class="font-medium">Rp {{ number_format($this->shippingTotal, 0, ',', '.') }}</span>
             </div>
+
+            @if ($this->discount > 0)
+                <div class="mt-2.5 flex justify-between text-[12px]">
+                    <span class="text-muted">Diskon ({{ $this->voucher->benefitLabel() }})</span>
+                    <span class="font-medium text-sale">&minus;Rp {{ number_format($this->discount, 0, ',', '.') }}</span>
+                </div>
+            @endif
 
             <div class="mt-2.5 flex items-baseline justify-between border-t border-line pt-3 text-[15px] font-bold">
                 <span>Total</span>

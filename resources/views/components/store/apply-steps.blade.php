@@ -1,14 +1,15 @@
 {{--
-    Alur pengajuan toko di sisi kanan halaman "Buka Toko". `current` = langkah aktif (1–3).
+    Alur pengajuan toko di sisi kanan halaman "Buka Toko". `current` = langkah aktif (1–4).
 --}}
 @props(['current' => 1])
 
 @php
     /** @var array<int, array{0: string, 1: string}> Langkah => [judul, penjelasan]. */
     $steps = [
-        1 => ['Isi formulir', 'Profil toko, alamat asal pengiriman, KTP, dan rekening pencairan.'],
+        1 => ['Isi formulir pendaftaran', 'Alamat asal pengiriman, KTP, dan rekening pencairan — diisi bertahap.'],
         2 => ['Ditinjau admin', 'Biasanya 1–2 hari kerja. Kalau ada yang kurang, kamu bisa memperbaiki dan mengirim ulang.'],
-        3 => ['Mulai berjualan', 'Toko aktif, punya halaman sendiri, dan produkmu tampil di katalog.'],
+        3 => ['Lengkapi profil toko', 'Setelah disetujui, beri nama, deskripsi, kontak, dan logo tokomu.'],
+        4 => ['Mulai berjualan', 'Toko punya halaman sendiri dan produkmu tampil di katalog.'],
     ];
 @endphp
 

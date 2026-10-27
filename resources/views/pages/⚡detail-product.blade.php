@@ -28,7 +28,8 @@ new class extends Component
     public function mount(Product $product): void
     {
         // Produk dari toko yang belum disetujui, ditolak, atau ditangguhkan tidak tampil ke publik.
-        abort_unless($product->isPurchasable(), 404);
+        // Admin & superadmin tetap bisa membukanya untuk memeriksa produk yang diturunkan.
+        abort_unless($product->isPurchasable() || in_array(Auth::user()?->role, ['admin', 'superadmin'], true), 404);
 
         $this->product = $product;
 
@@ -335,6 +336,12 @@ new class extends Component
 ?>
 
 <div class="mx-auto max-w-[1280px] px-side py-[clamp(20px,4vw,32px)]">
+    @unless ($product->isPurchasable())
+        <p class="mb-4 rounded-md border border-sale/30 bg-sale/5 px-[18px] py-3 text-[12.5px] text-sale" role="alert">
+            Pratinjau admin: produk ini tidak tampil ke publik{{ $product->isBanned() ? ' karena diblokir — '.$product->ban_reason : '.' }}
+        </p>
+    @endunless
+
     <x-ui.breadcrumbs :items="$this->breadcrumbs" />
 
     <div class="mt-[clamp(16px,3vw,28px)] grid grid-cols-1 items-start gap-[clamp(28px,5vw,64px)] lg:grid-cols-[minmax(0,1fr)_minmax(0,380px)]">
@@ -380,13 +387,17 @@ new class extends Component
 
         {{-- Panel informasi & pembelian --}}
         <div class="lg:pt-1.5">
-            <a
-                href="{{ route('stores.show', $product->store) }}"
-                wire:navigate.hover
-                class="text-[11px] font-semibold uppercase tracking-[0.18em] text-muted underline-offset-4 transition-colors hover:text-ink hover:underline"
-            >
-                {{ $product->store->name }}
-            </a>
+            @if ($product->store->slug)
+                <a
+                    href="{{ route('stores.show', $product->store) }}"
+                    wire:navigate.hover
+                    class="text-[11px] font-semibold uppercase tracking-[0.18em] text-muted underline-offset-4 transition-colors hover:text-ink hover:underline"
+                >
+                    {{ $product->store->name }}
+                </a>
+            @else
+                <span class="text-[11px] font-semibold uppercase tracking-[0.18em] text-muted">{{ $product->store->displayName() }}</span>
+            @endif
 
             <h1 class="mt-3 font-display text-[clamp(1.9rem,4.5vw,2.9rem)] font-normal uppercase leading-[1.05] tracking-[-0.01em]">
                 {{ $product->name }}

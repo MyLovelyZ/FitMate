@@ -63,13 +63,20 @@ new #[Title('Estética Archive')] class extends Component
             >
         </picture>
 
-        {{-- Gelap di bawah dan kiri supaya teks krem tetap terbaca di atas foto. --}}
-        <div
-            class="absolute inset-0 bg-[linear-gradient(180deg,rgba(10,25,47,0)_40%,rgba(10,25,47,0.6)_100%),linear-gradient(90deg,rgba(10,25,47,0.45)_0%,rgba(10,25,47,0)_55%)]"
+        {{--
+            Gelap di bawah dan kiri supaya teks krem tetap terbaca di atas foto. Lapisan ini
+            sekaligus link ke katalog, jadi menyentuh fotonya membuka katalog; untuk tab dan
+            pembaca layar link-nya cukup tombol "Shop the Archive".
+        --}}
+        <a
+            href="{{ route('products.index') }}"
+            wire:navigate
+            tabindex="-1"
             aria-hidden="true"
-        ></div>
+            class="absolute inset-0 bg-[linear-gradient(180deg,rgba(10,25,47,0)_40%,rgba(10,25,47,0.6)_100%),linear-gradient(90deg,rgba(10,25,47,0.45)_0%,rgba(10,25,47,0)_55%)]"
+        ></a>
 
-        <div class="relative z-1 mx-auto w-full max-w-[1280px] px-side pb-[clamp(32px,6vw,64px)] text-cream">
+        <div class="pointer-events-none relative z-1 mx-auto w-full max-w-[1280px] px-side pb-[clamp(32px,6vw,64px)] text-cream">
             <h1 class="max-w-[14ch] font-display text-[clamp(2.4rem,6vw,4.4rem)] font-normal leading-[1.05] tracking-[-0.01em]">
                 Your Daily<br>Go-To Style Mate
             </h1>
@@ -81,7 +88,7 @@ new #[Title('Estética Archive')] class extends Component
             <a
                 href="{{ route('products.index') }}"
                 wire:navigate
-                class="mt-[clamp(20px,3vw,28px)] inline-flex items-center justify-center rounded-[2px] bg-cream px-8 py-4 text-[13.5px] font-semibold uppercase tracking-[0.04em] text-ink transition-opacity duration-200 hover:opacity-85"
+                class="pointer-events-auto mt-[clamp(20px,3vw,28px)] inline-flex items-center justify-center rounded-[2px] bg-cream px-8 py-4 text-[13.5px] font-semibold uppercase tracking-[0.04em] text-ink transition-opacity duration-200 hover:opacity-85"
             >
                 Shop the Archive
             </a>
@@ -131,10 +138,11 @@ new #[Title('Estética Archive')] class extends Component
             </p>
 
             <a
-                href="#categories"
+                href="{{ route('products.index') }}"
+                wire:navigate
                 class="mt-[clamp(24px,4vw,36px)] inline-flex items-center justify-center rounded-[2px] bg-ink px-8 py-4 text-[13.5px] font-semibold uppercase tracking-[0.04em] text-cream transition-opacity duration-200 hover:opacity-85"
             >
-                Discover Our Story
+                Explore the Archive
             </a>
         </div>
     </section>
