@@ -1,5 +1,7 @@
 <?php
 
+use App\Models\Product;
+use Illuminate\Database\Eloquent\Collection;
 use Livewire\Attributes\Computed;
 use Livewire\Attributes\Title;
 use Livewire\Component;
@@ -43,6 +45,23 @@ new #[Title('Estética Archive')] class extends Component
                 'span' => '',
             ],
         ];
+    }
+
+    /**
+     * Produk yang bisa dibeli, terbaru dulu. Produk yang baru disimpan lewat
+     * Seller Center / admin langsung muncul di sini.
+     *
+     * @return Collection<int, Product>
+     */
+    #[Computed]
+    public function latestProducts(): Collection
+    {
+        return Product::purchasable()
+            ->with(['category', 'images'])
+            ->latest()
+            ->latest('id')
+            ->limit(8)
+            ->get();
     }
 };
 ?>
@@ -119,6 +138,22 @@ new #[Title('Estética Archive')] class extends Component
             </a>
         @endforeach
     </section>
+
+    {{-- Produk terbaru --}}
+    @if ($this->latestProducts->isNotEmpty())
+        <section id="new-arrivals" class="mx-auto max-w-[1280px] px-side pb-[clamp(32px,6vw,64px)]">
+            <div class="flex items-end justify-between gap-4">
+                <h2 class="font-display text-[clamp(1.5rem,3.4vw,2.1rem)] font-normal leading-tight">Produk Terbaru</h2>
+                <a href="{{ route('products.index', ['collection' => 'new']) }}" wire:navigate class="text-[12.5px] font-semibold uppercase tracking-[0.08em] hover:underline">Lihat Semua</a>
+            </div>
+
+            <div class="mt-6 grid grid-cols-2 gap-x-4 gap-y-8 md:grid-cols-3 lg:grid-cols-4">
+                @foreach ($this->latestProducts as $product)
+                    <x-ui.product-card :product="$product" wire:key="new-{{ $product->id }}" />
+                @endforeach
+            </div>
+        </section>
+    @endif
 
     {{-- Ethos --}}
     <section id="ethos" class="px-side py-[clamp(56px,10vw,120px)]">

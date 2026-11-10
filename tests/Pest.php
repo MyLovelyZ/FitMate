@@ -1,6 +1,14 @@
 <?php
 
+use App\Models\Cart;
+use App\Models\Order;
+use App\Models\Payment;
+use App\Models\ProductVariant;
+use App\Models\StoreOrder;
+use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\File;
+use Illuminate\Support\Str;
 use Livewire\Features\SupportTesting\Testable;
 use Tests\TestCase;
 
@@ -44,6 +52,52 @@ expect()->extend('toBeOne', function () {
 | global functions to help you to reduce the number of lines of code in your test files.
 |
 */
+
+/**
+ * Mengarahkan `public_path()` ke folder sementara, supaya test unggah foto
+ * produk (yang dipindah ke `public/assets/images/`) tidak mengotori folder
+ * public asli. Hapus folder yang dikembalikan di `afterEach`, dan panggil
+ * `$this->withoutVite()` karena manifest Vite juga dicari di public_path().
+ */
+function fakePublicPath(): string
+{
+    $path = storage_path('framework/testing/public-'.Str::random(10));
+
+    File::ensureDirectoryExists($path);
+    app()->usePublicPath($path);
+
+    return $path;
+}
+
+/**
+ * Pesanan pembeli berisi 1 barang Rp100.000 (stok awal 5) yang sudah dibayar
+ * dan dikirim penjual — titik awal untuk ulasan dan komplain.
+ *
+ * @return array{order: Order, package: StoreOrder, variant: ProductVariant}
+ */
+function shippedOrderFor(User $buyer): array
+{
+    $variant = ProductVariant::factory()->create(['stock' => 5, 'price' => 100000]);
+    Cart::forUser($buyer)->items()->create(['product_variant_id' => $variant->id, 'quantity' => 1]);
+
+    $order = Order::placeFromCart($buyer, [
+        'recipient_name' => 'Zahir',
+        'recipient_phone' => '081200000000',
+        'street' => 'Jl. Merdeka No. 1',
+        'city' => 'Bandung',
+        'state' => 'Jawa Barat',
+        'postal_code' => '40111',
+    ], 'jne-reg', 'qris');
+
+    $payment = $order->payments()->sole();
+    $payment->settle(Payment::SIMULATOR.'-'.$payment->reference);
+
+    $package = $order->storeOrders()->sole();
+    $package->process();
+    $package->ship('JNE0001');
+
+    return ['order' => $order->refresh(), 'package' => $package->refresh(), 'variant' => $variant];
+}
 
 /**
  * Memuat satu `@island(lazy: true)` seperti yang dilakukan browser saat island

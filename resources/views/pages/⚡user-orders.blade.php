@@ -87,7 +87,7 @@ new #[Title('Pesanan Saya')] class extends Component
         :breadcrumbs="['Beranda' => route('home'), 'Akun' => route('profile'), 'Pesanan' => null]"
         title="Pesanan Saya"
         description="Pantau pembayaran, pengemasan, dan pengiriman belanjaanmu."
-        :links="['profile' => 'Profil', 'user.orders' => 'Pesanan', 'user.cart' => 'Keranjang']"
+        :links="['profile' => 'Profil', 'user.orders' => 'Pesanan', 'user.wishlist' => 'Wishlist', 'user.cart' => 'Keranjang']"
     />
 
     <nav class="mt-6 flex gap-2 overflow-x-auto pb-1" aria-label="Filter status pesanan">

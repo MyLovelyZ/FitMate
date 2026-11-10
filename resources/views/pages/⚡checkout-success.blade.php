@@ -101,6 +101,14 @@ new #[Title('Pembayaran Berhasil')] class extends Component
         </a>
 
         <a
+            href="{{ route('orders.invoice', $order) }}"
+            wire:navigate
+            class="inline-flex min-w-[150px] items-center justify-center rounded-[2px] border border-line bg-surface px-5 py-3 text-[11.5px] font-bold uppercase tracking-[0.1em] transition-colors hover:border-ink"
+        >
+            Lihat Nota
+        </a>
+
+        <a
             href="{{ route('products.index') }}"
             wire:navigate
             class="inline-flex min-w-[150px] items-center justify-center rounded-[2px] border border-line bg-surface px-5 py-3 text-[11.5px] font-bold uppercase tracking-[0.1em] transition-colors hover:border-ink"

@@ -92,6 +92,11 @@ new #[Layout('layouts::auth')] #[Title('Masuk')] class extends Component
         <p class="mt-5 rounded-[2px] border border-sale/30 bg-sale/5 px-3.5 py-3 text-[12.5px] text-sale" role="alert">{{ session('status') }}</p>
     @endif
 
+    {{-- Dari halaman reset kata sandi. --}}
+    @if (session('success'))
+        <p class="mt-5 rounded-[2px] border border-success/30 bg-success/12 px-3.5 py-3 text-[12.5px] text-success" role="status">{{ session('success') }}</p>
+    @endif
+
     <form wire:submit="login" class="mt-7 flex flex-col gap-4">
         <x-ui.input
             name="email"
@@ -110,10 +115,14 @@ new #[Layout('layouts::auth')] #[Title('Masuk')] class extends Component
             autocomplete="current-password"
         />
 
-        <label class="flex w-fit cursor-pointer items-center gap-2 text-[13px] text-muted">
-            <input type="checkbox" wire:model="remember" class="size-4 accent-ink">
-            Ingat saya
-        </label>
+        <div class="flex items-center justify-between gap-3">
+            <label class="flex w-fit cursor-pointer items-center gap-2 text-[13px] text-muted">
+                <input type="checkbox" wire:model="remember" class="size-4 accent-ink">
+                Ingat saya
+            </label>
+
+            <a href="{{ route('password.request') }}" wire:navigate class="text-[13px] font-semibold text-ink underline-offset-4 hover:underline">Lupa kata sandi?</a>
+        </div>
 
         <x-ui.button target="login" class="mt-2">Masuk</x-ui.button>
     </form>

@@ -94,7 +94,7 @@ new #[Title('Keranjang')] class extends Component
     <x-ui.area-header
         :breadcrumbs="['Beranda' => route('home'), 'Akun' => route('profile'), 'Keranjang' => null]"
         title="Keranjang"
-        :links="['profile' => 'Profil', 'user.orders' => 'Pesanan', 'user.cart' => 'Keranjang']"
+        :links="['profile' => 'Profil', 'user.orders' => 'Pesanan', 'user.wishlist' => 'Wishlist', 'user.cart' => 'Keranjang']"
     />
 
     @if ($this->groups->isEmpty())

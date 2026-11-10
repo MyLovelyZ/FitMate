@@ -22,6 +22,42 @@ new #[Title('Produk Saya')] class extends Component
     }
 
     /**
+     * Seller menayangkan atau menyembunyikan produknya sendiri. Blokir FitMate
+     * (`banned_at`) terpisah, jadi produk yang diblokir tetap tidak tampil.
+     */
+    public function toggleActive(int $productId): void
+    {
+        $product = $this->ownedProduct($productId);
+        $product->update(['is_active' => ! $product->is_active]);
+
+        unset($this->products);
+
+        $this->dispatch('notify', message: $product->is_active ? "\"{$product->name}\" ditayangkan." : "\"{$product->name}\" disembunyikan dari katalog.");
+    }
+
+    /**
+     * Soft delete: riwayat pesanan tetap utuh karena `order_items` menyimpan salinan.
+     */
+    public function delete(int $productId): void
+    {
+        $product = $this->ownedProduct($productId);
+        $product->delete();
+
+        unset($this->products);
+
+        $this->dispatch('notify', message: "\"{$product->name}\" dihapus.");
+    }
+
+    protected function ownedProduct(int $productId): Product
+    {
+        $product = Product::where('store_id', Auth::user()->store?->id ?? 0)->find($productId);
+
+        abort_if($product === null, 404);
+
+        return $product;
+    }
+
+    /**
      * Produk toko milik user yang login; kosong kalau user belum punya toko.
      *
      * @return LengthAwarePaginator<int, Product>
@@ -42,25 +78,36 @@ new #[Title('Produk Saya')] class extends Component
 
 <div class="mx-auto max-w-[1280px] px-side pb-[clamp(48px,8vw,80px)] pt-[clamp(32px,6vw,56px)]">
     <x-ui.area-header
-        :breadcrumbs="['Beranda' => route('home'), 'Seller' => route('seller.dashboard'), 'Produk' => null]"
+        :breadcrumbs="['Beranda' => route('home'), 'Seller Center' => route('seller.dashboard'), 'Produk' => null]"
         title="Produk Saya"
-        :links="['seller.dashboard' => 'Dashboard', 'seller.products.index' => 'Produk', 'seller.orders.index' => 'Pesanan']"
+        :links="auth()->user()->sellerAreaLinks()"
     />
 
-    <div class="mt-6">
-        <label for="search" class="sr-only">Cari produk</label>
-        <input
-            id="search"
-            type="search"
-            wire:model.live.debounce.400ms="search"
-            value="{{ $search }}"
-            placeholder="Cari nama produk…"
-            class="w-full max-w-sm rounded-[2px] border border-line bg-surface px-3 py-2 text-[12.5px]"
-        >
+    <div class="mt-6 flex flex-wrap items-center justify-between gap-3">
+        <div class="w-full max-w-sm">
+            <label for="search" class="sr-only">Cari produk</label>
+            <input
+                id="search"
+                type="search"
+                wire:model.live.debounce.400ms="search"
+                value="{{ $search }}"
+                placeholder="Cari nama produk…"
+                class="w-full rounded-[2px] border border-line bg-surface px-3 py-2 text-[12.5px]"
+            >
+        </div>
+
+        @if (auth()->user()->store)
+            <a href="{{ route('seller.products.create') }}" wire:navigate class="inline-flex items-center rounded-[2px] bg-ink px-5 py-2.5 text-[11.5px] font-bold uppercase tracking-[0.1em] text-cream transition-opacity hover:opacity-85">+ Tambah Produk</a>
+        @endif
     </div>
 
     @if ($this->products->isEmpty())
-        <p class="mt-4 rounded-md border border-line bg-surface px-[18px] py-6 text-center text-[13px] text-muted">Belum ada produk.</p>
+        <p class="mt-4 rounded-md border border-line bg-surface px-[18px] py-6 text-center text-[13px] text-muted">
+            Belum ada produk.
+            @if (auth()->user()->store && $search === '')
+                <a href="{{ route('seller.products.create') }}" wire:navigate class="font-semibold text-ink underline underline-offset-4">Tambah produk pertamamu</a>.
+            @endif
+        </p>
     @else
         <div wire:loading.delay.class="pointer-events-none opacity-50" class="mt-4 overflow-x-auto rounded-md border border-line bg-surface transition-opacity duration-200">
             <table class="w-full text-left text-[12.5px]">
@@ -72,6 +119,7 @@ new #[Title('Produk Saya')] class extends Component
                         <th class="px-[18px] py-3 font-semibold">Varian</th>
                         <th class="px-[18px] py-3 font-semibold">Stok</th>
                         <th class="px-[18px] py-3 font-semibold">Status</th>
+                        <th class="px-[18px] py-3"><span class="sr-only">Aksi</span></th>
                     </tr>
                 </thead>
                 <tbody>
@@ -95,6 +143,22 @@ new #[Title('Produk Saya')] class extends Component
                                 @else
                                     <span class="rounded-[3px] bg-cream px-2 py-0.5 text-[11px] font-semibold">{{ $product->is_active ? 'Aktif' : 'Nonaktif' }}</span>
                                 @endif
+                            </td>
+                            <td class="px-[18px] py-3">
+                                <div class="flex items-center justify-end gap-1.5 whitespace-nowrap">
+                                    <a href="{{ route('seller.products.edit', $product) }}" wire:navigate class="inline-flex items-center rounded-[2px] border border-line px-3 py-1.5 text-[12px] font-semibold transition-colors hover:border-ink">Ubah</a>
+                                    <button type="button" wire:click="toggleActive({{ $product->id }})" class="cursor-pointer rounded-[2px] border border-line px-3 py-1.5 text-[12px] font-semibold transition-colors hover:border-ink">
+                                        {{ $product->is_active ? 'Sembunyikan' : 'Tayangkan' }}
+                                    </button>
+                                    <button
+                                        type="button"
+                                        wire:click="delete({{ $product->id }})"
+                                        wire:confirm="Hapus produk ini? Produk hilang dari katalog dan keranjang pembeli, riwayat pesanan tetap tersimpan."
+                                        class="cursor-pointer px-2 py-1.5 text-[12px] font-semibold text-muted transition-colors hover:text-sale"
+                                    >
+                                        Hapus
+                                    </button>
+                                </div>
                             </td>
                         </tr>
                     @endforeach

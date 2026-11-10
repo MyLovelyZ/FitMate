@@ -5,9 +5,10 @@ use App\Models\Store;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\View\View;
 use Livewire\Attributes\Computed;
+use Livewire\Attributes\Layout;
 use Livewire\Component;
 
-new class extends Component
+new #[Layout('layouts::admin')] class extends Component
 {
     public Store $store;
 

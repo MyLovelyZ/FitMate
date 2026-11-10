@@ -3,6 +3,7 @@
 use App\Models\Cart;
 use App\Models\Product;
 use App\Models\ProductImage;
+use App\Models\ProductReview;
 use App\Models\ProductVariant;
 use Illuminate\Database\Eloquent\Collection as EloquentCollection;
 use Illuminate\Support\Collection;
@@ -122,6 +123,63 @@ new class extends Component
             url: route('user.cart'),
             action: 'Lihat Keranjang',
         );
+    }
+
+    /**
+     * Simpan/lepas produk dari wishlist. Tamu diarahkan ke login dulu.
+     */
+    public function toggleWishlist(): void
+    {
+        $user = Auth::user();
+
+        if (! $user) {
+            redirect()->setIntendedUrl(route('products.show', $this->product));
+            $this->redirectRoute('login', navigate: true);
+
+            return;
+        }
+
+        if (! $user->canShop()) {
+            $this->addError('cart', 'Wishlist hanya tersedia untuk akun pembeli.');
+
+            return;
+        }
+
+        $saved = $user->toggleWishlist($this->product);
+        unset($this->isWishlisted);
+
+        $this->dispatch(
+            'notify',
+            message: $saved ? "{$this->product->name} disimpan ke wishlist." : "{$this->product->name} dihapus dari wishlist.",
+            url: $saved ? route('user.wishlist') : null,
+            action: $saved ? 'Lihat Wishlist' : null,
+        );
+    }
+
+    #[Computed]
+    public function isWishlisted(): bool
+    {
+        return (bool) Auth::user()?->hasInWishlist($this->product);
+    }
+
+    /**
+     * @return array{average: float, count: int, stars: array<int, int>, fit: array<string, int>, topFit: ?string}
+     */
+    #[Computed]
+    public function ratingSummary(): array
+    {
+        return $this->product->ratingSummary();
+    }
+
+    /**
+     * Ulasan terbaru, maksimal 10.
+     *
+     * @return EloquentCollection<int, ProductReview>
+     */
+    #[Computed]
+    public function reviews(): EloquentCollection
+    {
+        return $this->product->reviews()->with(['user', 'orderItem'])->latest()->limit(10)->get();
     }
 
     /**
@@ -405,6 +463,17 @@ new class extends Component
 
             <p class="mt-4 text-[17px]">{{ $this->price }}</p>
 
+            @if ($this->ratingSummary['count'] > 0)
+                <a href="#ulasan" class="mt-2 inline-flex items-center gap-1.5 text-[12.5px] text-muted hover:text-ink">
+                    <span class="text-ink" aria-hidden="true">★</span>
+                    <span class="font-semibold text-ink">{{ number_format($this->ratingSummary['average'], 1, ',', '.') }}</span>
+                    <span>({{ $this->ratingSummary['count'] }} ulasan)</span>
+                    @if ($this->ratingSummary['topFit'])
+                        <span>&middot; Kebanyakan bilang ukurannya {{ strtolower(ProductReview::FIT_LABELS[$this->ratingSummary['topFit']]) }}</span>
+                    @endif
+                </a>
+            @endif
+
             @if ($this->sizes->isNotEmpty())
                 <div class="mt-[clamp(20px,3vw,28px)] border-t border-line pt-5">
                     <div class="flex items-baseline justify-between gap-4">
@@ -536,6 +605,20 @@ new class extends Component
                 </button>
             </div>
 
+            @unless ($isStaff)
+                <button
+                    type="button"
+                    wire:click="toggleWishlist"
+                    aria-pressed="{{ $this->isWishlisted ? 'true' : 'false' }}"
+                    class="mt-2.5 flex h-12 w-full cursor-pointer items-center justify-center gap-2 rounded-[2px] border border-line text-[12.5px] font-semibold uppercase tracking-[0.06em] transition-colors hover:border-ink"
+                >
+                    <svg class="size-4" viewBox="0 0 24 24" fill="{{ $this->isWishlisted ? 'currentColor' : 'none' }}" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round" aria-hidden="true">
+                        <path d="M12 20s-7-4.4-7-10a4 4 0 0 1 7-2.6A4 4 0 0 1 19 10c0 5.6-7 10-7 10Z" />
+                    </svg>
+                    {{ $this->isWishlisted ? 'Tersimpan di Wishlist' : 'Simpan ke Wishlist' }}
+                </button>
+            @endunless
+
             @error('cart')
                 <p class="mt-2 text-[12.5px] text-sale" role="alert">{{ $message }}</p>
             @enderror
@@ -586,4 +669,66 @@ new class extends Component
             </div>
         </div>
     </div>
+    {{-- Ulasan pembeli: hanya dari pembeli yang pesanannya sudah selesai. --}}
+    <section id="ulasan" class="mt-[clamp(40px,7vw,72px)] border-t border-line pt-[clamp(24px,4vw,40px)]">
+        <div class="flex flex-wrap items-end justify-between gap-4">
+            <h2 class="font-display text-[clamp(1.4rem,3vw,1.9rem)] font-normal leading-tight">Ulasan Pembeli</h2>
+            @if ($this->ratingSummary['count'] > 0)
+                <p class="text-[13px] text-muted">
+                    <span class="font-semibold text-ink">★ {{ number_format($this->ratingSummary['average'], 1, ',', '.') }}</span> dari 5 &middot; {{ $this->ratingSummary['count'] }} ulasan
+                </p>
+            @endif
+        </div>
+
+        @if ($this->ratingSummary['count'] === 0)
+            <p class="mt-4 rounded-md border border-line bg-surface px-[18px] py-6 text-center text-[13px] text-muted">Belum ada ulasan. Ulasan bisa ditulis pembeli setelah pesanannya selesai.</p>
+        @else
+            <div class="mt-5 grid grid-cols-1 gap-6 lg:grid-cols-[260px_minmax(0,1fr)]">
+                <div class="flex flex-col gap-4">
+                    <ul class="flex flex-col gap-1.5 text-[12px]" aria-label="Sebaran bintang">
+                        @foreach ($this->ratingSummary['stars'] as $star => $total)
+                            <li class="flex items-center gap-2">
+                                <span class="w-6 shrink-0 text-muted">{{ $star }}★</span>
+                                <span class="h-1.5 flex-1 overflow-hidden rounded-full bg-line">
+                                    <span class="block h-full bg-ink" style="width: {{ round($total / $this->ratingSummary['count'] * 100) }}%"></span>
+                                </span>
+                                <span class="w-6 shrink-0 text-right text-muted">{{ $total }}</span>
+                            </li>
+                        @endforeach
+                    </ul>
+
+                    @if ($this->ratingSummary['fit'] !== [])
+                        <div class="rounded-md border border-line bg-surface px-4 py-3 text-[12px]">
+                            <p class="font-semibold uppercase tracking-[0.1em]">Kata pembeli soal ukuran</p>
+                            <ul class="mt-2 flex flex-col gap-1 text-muted">
+                                @foreach ($this->ratingSummary['fit'] as $fit => $total)
+                                    <li class="flex justify-between gap-3"><span>{{ ProductReview::FIT_LABELS[$fit] ?? $fit }}</span><span>{{ $total }}</span></li>
+                                @endforeach
+                            </ul>
+                        </div>
+                    @endif
+                </div>
+
+                <ul class="flex flex-col divide-y divide-line">
+                    @foreach ($this->reviews as $review)
+                        <li wire:key="review-{{ $review->id }}" class="py-4 first:pt-0">
+                            <div class="flex flex-wrap items-center justify-between gap-2">
+                                <p class="text-[13px] font-semibold">{{ $review->user?->name ?? 'Pembeli' }}</p>
+                                <p class="text-[12px] text-muted">{{ $review->created_at->format('d M Y') }}</p>
+                            </div>
+                            <p class="mt-1 text-[13px]" aria-label="{{ $review->rating }} dari 5 bintang">
+                                <span class="tracking-[0.1em]">{{ str_repeat('★', $review->rating) }}</span><span class="tracking-[0.1em] text-line">{{ str_repeat('★', 5 - $review->rating) }}</span>
+                            </p>
+                            <p class="mt-1 text-[12px] text-muted">
+                                {{ collect([$review->orderItem?->size_label ? 'Ukuran '.$review->orderItem->size_label : null, $review->orderItem?->color_name, $review->fit_feedback ? 'Ukuran terasa '.strtolower(ProductReview::FIT_LABELS[$review->fit_feedback]) : null])->filter()->join(' · ') }}
+                            </p>
+                            @if ($review->comment)
+                                <p class="mt-2 text-[13.5px] leading-[1.7]">{{ $review->comment }}</p>
+                            @endif
+                        </li>
+                    @endforeach
+                </ul>
+            </div>
+        @endif
+    </section>
 </div>

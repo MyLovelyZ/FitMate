@@ -2,9 +2,13 @@
     Notifikasi singkat di bawah layar. Komponen Livewire memicunya lewat
     `$this->dispatch('notify', message: 'Profil tersimpan.')`, opsional dengan
     tautan: `url: route('user.cart'), action: 'Lihat Keranjang'`.
+    Controller (form POST biasa) memakai flash session: `->with('notify', '...')`.
 --}}
 <div
     x-data="{ toasts: [], nextId: 0 }"
+    @if (session('notify'))
+        x-init="$nextTick(() => $dispatch('notify', { message: @js(session('notify')) }))"
+    @endif
     x-on:notify.window="
         const id = nextId++;
         toasts.push({ id, message: $event.detail.message, url: $event.detail.url ?? null, action: $event.detail.action ?? null });

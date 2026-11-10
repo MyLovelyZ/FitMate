@@ -1,6 +1,7 @@
 ---
 paths:
   - app/Models/ProductImage.php
+  - app/Models/Product.php
   - app/Models/Order.php
   - app/Models/Cart.php
   - app/Models/Store.php
@@ -10,12 +11,13 @@ paths:
   - app/Models/EscrowHold.php
   - app/Models/Voucher.php
   - app/Models/User.php
+  - app/Models/Dispute.php
 ---
 
 # Models
 
 ## product_images.path relatif ke public/, tampilkan lewat ->url
-`path` disimpan relatif ke folder `public/` dan dirender dengan accessor `$image->url` (= `asset($path)`), sama seperti gambar statis di home. Unggahan seller nanti (BE-053) yang masuk disk `public` harus disimpan dengan awalan `storage/` (mis. `storage/products/x.webp`), jangan path disk mentah.
+`path` disimpan relatif ke folder `public/` dan dirender dengan accessor `$image->url` (= `asset($path)`), sama seperti gambar statis di home. Unggahan seller/admin hanya lewat `Product::addImages()`: file di-`move()` ke `public/assets/images/` (`Product::IMAGE_DIRECTORY`) dengan nama `{time()}_{slug}_{acak}.{ext}` dan path `assets/images/...` (checklist PM). Path lama berawalan `storage/` (disk `public`) masih dihapus dengan benar oleh `removeImages()`. Di test, panggil `fakePublicPath()` + `$this->withoutVite()` supaya file tidak masuk ke `public/` asli.
 
 Satu `is_primary` per produk dijaga model event: foto pertama otomatis jadi utama, menandai foto lain sebagai utama melepas yang lama. Pakai `Product::images()` (utama di depan) untuk galeri dan `Product::primaryImage()` untuk daftar/thumbnail.
 
@@ -49,3 +51,6 @@ Tidak ada kolom `used_count`: pemakaian = `Voucher::redemptions()` (orders denga
 Akun diblokir lewat `User::ban($by, $reason)` / `unban()` (kolom `banned_at`, `banned_by`, `ban_reason`), BUKAN `users.status`. Middleware `EnsureUserIsNotBanned` (web group) mengeluarkan sesi yang diblokir dan login menolaknya. `ban()` ikut menangguhkan toko aktif; `unban()` sengaja tidak mengaktifkannya lagi (lewat review toko — superadmin boleh masuk area admin). Superadmin tidak bisa memblokir/menghapus sesama superadmin (`canModerate()`).
 
 Hapus akun hanya lewat `deleteAccount()`, yang menolak kalau `deletionBlocker()` menemukan riwayat uang (pesanan, store_orders, wallet_transactions, payouts, refund, sengketa); akun seperti itu cukup diblokir. Produk diblokir lewat `Product::ban()` (terpisah dari `is_active` milik seller) dan dihapus dengan soft delete; `isPurchasable()`/scope `purchasable()` sudah mengecualikan `banned_at`.
+
+## Komplain, ulasan, wishlist, live chat: lewat metode model
+Komplain: pembeli `StoreOrder::openDispute()` (dari shipped/delivered → disputed, escrow tetap held, `releaseDue` melewatinya). CS memutuskan hanya lewat `Dispute::resolve($staff, 'buyer'|'seller', $note)`: buyer → `refundForDispute()` (paket refunded, dana ke wallet pembeli, stok TIDAK kembali), seller → `complete('dispute_resolved')`. Ulasan hanya `ProductReview::submitFor()` (pemilik pesanan, paket completed, satu per order_item). Wishlist = pivot `wishlists` lewat `User::wishlist()/toggleWishlist()`, tanpa model. Chat: `ChatConversation::forCustomer()` (maks satu `open` per pelanggan) + `send()` (staf yang membalas jadi `assigned_to`) + `markReadBy()`; halaman memakai `wire:poll`, belum websocket. Di komponen SFC jangan tulis `use LogicException;` (non-compound use memicu error) — kelas global langsung terpakai.

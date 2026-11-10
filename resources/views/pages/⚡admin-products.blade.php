@@ -8,6 +8,7 @@ use Illuminate\Support\Facades\Auth;
 use Livewire\Attributes\Computed;
 use Livewire\Attributes\Title;
 use Livewire\Attributes\Url;
+use Livewire\Attributes\Layout;
 use Livewire\Component;
 use Livewire\WithPagination;
 
@@ -16,7 +17,7 @@ use Livewire\WithPagination;
  * tampil di katalog. Admin dan superadmin bisa memblokir (menurunkan dari
  * katalog tanpa bisa ditayangkan lagi oleh seller), menghapus, dan memulihkan produk.
  */
-new #[Title('Produk')] class extends Component
+new #[Layout('layouts::admin')] #[Title('Produk')] class extends Component
 {
     use WithPagination;
 
@@ -204,6 +205,10 @@ new #[Title('Produk')] class extends Component
         description="Semua barang yang dijual di FitMate, termasuk yang tidak tampil di katalog."
         :links="auth()->user()->adminAreaLinks()"
     />
+
+    <div class="mt-6 flex justify-end">
+        <a href="{{ route('admin.products.create') }}" class="inline-flex items-center rounded-[2px] bg-ink px-5 py-2.5 text-[11.5px] font-bold uppercase tracking-[0.1em] text-cream transition-opacity hover:opacity-85">+ Tambah Produk</a>
+    </div>
 
     @if ($this->store)
         <p class="mt-6 flex flex-wrap items-center gap-2 text-[12.5px]">

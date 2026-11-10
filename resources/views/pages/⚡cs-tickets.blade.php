@@ -83,10 +83,12 @@ new #[Title('Tiket Bantuan')] class extends Component
                 <tbody>
                     @foreach ($this->tickets as $ticket)
                         <tr wire:key="ticket-{{ $ticket->id }}" class="border-t border-line">
-                            <td class="px-[18px] py-3 font-medium">#{{ $ticket->id }}</td>
+                            <td class="px-[18px] py-3 font-medium">
+                                <a href="{{ route('cs.tickets.show', $ticket) }}" wire:navigate class="underline-offset-4 hover:underline">#{{ $ticket->id }}</a>
+                            </td>
                             <td class="px-[18px] py-3">{{ $ticket->storeOrder?->store_order_number }}</td>
                             <td class="px-[18px] py-3">{{ $ticket->openedBy?->name }}</td>
-                            <td class="px-[18px] py-3">{{ str($ticket->reason)->replace('_', ' ')->ucfirst() }}</td>
+                            <td class="px-[18px] py-3">{{ Dispute::REASON_LABELS[$ticket->reason] ?? $ticket->reason }}</td>
                             <td class="px-[18px] py-3">
                                 <span class="rounded-[3px] bg-cream px-2 py-0.5 text-[11px] font-semibold">{{ $this::STATUSES[$ticket->status] ?? $ticket->status }}</span>
                             </td>

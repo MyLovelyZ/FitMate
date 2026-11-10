@@ -2,13 +2,14 @@
 
 use Livewire\Attributes\Computed;
 use Livewire\Attributes\Title;
+use Livewire\Attributes\Layout;
 use Livewire\Component;
 
 /**
  * Pengaturan aplikasi masih dibaca dari `config/` dan `.env`, belum ada tabel
  * settings. Halaman ini menampilkannya apa adanya (read-only).
  */
-new #[Title('Pengaturan')] class extends Component
+new #[Layout('layouts::admin')] #[Title('Pengaturan')] class extends Component
 {
     /**
      * @return array<string, string>

@@ -5,8 +5,9 @@ Before planning or editing, find the row whose globs match the file's path and r
 | Applies to | Rule file |
 | --- | --- |
 | database/** | .ai/rules/database.md |
+| resources/views/layouts/** | .ai/rules/layouts.md |
 | database/migrations/** | .ai/rules/migrations.md |
-| app/Models/ProductImage.php, app/Models/Order.php, app/Models/Cart.php, app/Models/Store.php, app/Models/StoreOrder.php, app/Models/Payment.php, app/Models/Wallet.php, app/Models/EscrowHold.php, app/Models/Voucher.php, app/Models/User.php | .ai/rules/models.md |
+| app/Models/ProductImage.php, app/Models/Product.php, app/Models/Order.php, app/Models/Cart.php, app/Models/Store.php, app/Models/StoreOrder.php, app/Models/Payment.php, app/Models/Wallet.php, app/Models/EscrowHold.php, app/Models/Voucher.php, app/Models/User.php, app/Models/Dispute.php | .ai/rules/models.md |
 | resources/views/pages/** | .ai/rules/pages.md |
 | resources/views/partials/navbar.blade.php | .ai/rules/partials.md |
 | routes/web.php | .ai/rules/routes.md |

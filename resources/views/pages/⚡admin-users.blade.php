@@ -7,6 +7,7 @@ use Illuminate\Support\Facades\Auth;
 use Livewire\Attributes\Computed;
 use Livewire\Attributes\Title;
 use Livewire\Attributes\Url;
+use Livewire\Attributes\Layout;
 use Livewire\Component;
 use Livewire\WithPagination;
 
@@ -14,7 +15,7 @@ use Livewire\WithPagination;
  * Daftar akun untuk admin dan superadmin. Admin hanya melihat pelanggan dan
  * seller (`User::CUSTOMER_ROLES`); superadmin melihat semua role.
  */
-new #[Title('Kelola Pengguna')] class extends Component
+new #[Layout('layouts::admin')] #[Title('Kelola Pengguna')] class extends Component
 {
     use WithPagination;
 

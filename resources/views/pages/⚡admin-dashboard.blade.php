@@ -7,9 +7,10 @@ use App\Models\User;
 use Illuminate\Database\Eloquent\Collection;
 use Livewire\Attributes\Computed;
 use Livewire\Attributes\Title;
+use Livewire\Attributes\Layout;
 use Livewire\Component;
 
-new #[Title('Dashboard Admin')] class extends Component
+new #[Layout('layouts::admin')] #[Title('Dashboard Admin')] class extends Component
 {
     /**
      * Angka ringkas untuk kartu statistik: label => nilai siap tampil.

@@ -8,6 +8,7 @@ use Illuminate\Support\Facades\Auth;
 use Illuminate\Validation\Rule;
 use Illuminate\View\View;
 use Livewire\Attributes\Computed;
+use Livewire\Attributes\Layout;
 use Livewire\Component;
 
 /**
@@ -15,7 +16,7 @@ use Livewire\Component;
  * dijualnya, serta tombol blokir dan hapus permanen. Admin hanya bisa membuka
  * pelanggan dan seller; ubah role khusus superadmin.
  */
-new class extends Component
+new #[Layout('layouts::admin')] class extends Component
 {
     /** Berapa produk terbaru yang ditampilkan; sisanya di halaman Produk. */
     public const PRODUCT_PREVIEW_LIMIT = 8;

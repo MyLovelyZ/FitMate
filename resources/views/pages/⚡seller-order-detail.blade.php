@@ -132,10 +132,10 @@ new class extends Component
     @endphp
 
     <x-ui.area-header
-        :breadcrumbs="['Beranda' => route('home'), 'Seller' => route('seller.dashboard'), 'Pesanan' => route('seller.orders.index'), $storeOrder->store_order_number => null]"
+        :breadcrumbs="['Beranda' => route('home'), 'Seller Center' => route('seller.dashboard'), 'Pesanan' => route('seller.orders.index'), $storeOrder->store_order_number => null]"
         :title="$storeOrder->store_order_number"
         :description="'Dipesan '.($order->placed_at ?? $order->created_at)->format('d M Y, H:i').' oleh '.$order->user?->name"
-        :links="['seller.dashboard' => 'Dashboard', 'seller.products.index' => 'Produk', 'seller.orders.index' => 'Pesanan']"
+        :links="auth()->user()->sellerAreaLinks()"
     />
 
     <div class="mt-6 grid grid-cols-1 items-start gap-6 lg:grid-cols-[minmax(0,1fr)_320px]">
@@ -211,6 +211,12 @@ new class extends Component
                         <p class="text-muted">Selesai. Pendapatan Rp {{ number_format((float) $storeOrder->seller_earning, 0, ',', '.') }} sudah masuk saldo tokomu.</p>
                     @elseif ($storeOrder->status === 'cancelled')
                         <p class="text-muted">{{ $storeOrder->note ?? 'Pesanan ini dibatalkan.' }}</p>
+                    @elseif (in_array($storeOrder->status, ['disputed', 'refunded'], true) && ($dispute = $storeOrder->disputes()->latest('id')->first()))
+                        <p class="font-semibold">Komplain pembeli: {{ App\Models\Dispute::REASON_LABELS[$dispute->reason] ?? $dispute->reason }}</p>
+                        <p class="mt-1 text-muted">{{ $dispute->description }}</p>
+                        <p class="mt-2 text-muted">
+                            {{ $dispute->isOpen() ? 'CS FitMate sedang meninjau. Dana paket ini ditahan sampai ada keputusan.' : 'Keputusan CS: '.$dispute->resolution_note }}
+                        </p>
                     @else
                         <p class="text-muted">{{ StoreOrder::BUYER_STATUS_LABELS[$storeOrder->status] ?? $storeOrder->status }}.</p>
                     @endif

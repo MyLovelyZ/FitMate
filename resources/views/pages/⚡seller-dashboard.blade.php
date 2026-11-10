@@ -42,10 +42,10 @@ new #[Title('Dashboard Seller')] class extends Component
 
 <div class="mx-auto max-w-[1280px] px-side pb-[clamp(48px,8vw,80px)] pt-[clamp(32px,6vw,56px)]">
     <x-ui.area-header
-        :breadcrumbs="['Beranda' => route('home'), 'Seller' => null]"
-        title="Dashboard Seller"
+        :breadcrumbs="['Beranda' => route('home'), 'Seller Center' => null]"
+        title="Seller Center"
         :description="$this->store ? $this->store->displayName().' · '.$this->store->statusLabel() : null"
-        :links="['seller.dashboard' => 'Dashboard', 'seller.products.index' => 'Produk', 'seller.orders.index' => 'Pesanan']"
+        :links="auth()->user()->sellerAreaLinks()"
     />
 
     @if ($this->store?->needsProfile())

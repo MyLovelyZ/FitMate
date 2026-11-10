@@ -22,6 +22,7 @@ it('bisa merender semua halaman', function (string $name) {
     'products.index',
     'login',
     'register',
+    'password.request',
     'help',
     'stores.create',
 ]);

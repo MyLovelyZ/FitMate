@@ -27,14 +27,17 @@ class StoreOrder extends Model
      *
      * - `shipped` boleh langsung `completed`: pembeli menekan "Pesanan Diterima"
      *   sebelum kurir menandai sampai.
-     * - `disputed` diselesaikan admin/CS (Fase 8), bukan dari halaman ini.
+     * - `shipped`/`delivered` boleh `disputed`: pembeli mengajukan komplain
+     *   (`openDispute`), termasuk "barang tidak sampai" sebelum ditandai sampai.
+     * - `disputed` diselesaikan CS lewat `Dispute::resolve()`: menang pembeli →
+     *   `refunded`, menang penjual → `completed`.
      *
      * @var array<string, array<int, string>>
      */
     public const TRANSITIONS = [
         'pending' => ['processing', 'cancelled'],
         'processing' => ['shipped', 'cancelled'],
-        'shipped' => ['delivered', 'completed'],
+        'shipped' => ['delivered', 'completed', 'disputed'],
         'delivered' => ['completed', 'disputed'],
         'disputed' => ['completed', 'refunded'],
     ];
@@ -265,6 +268,53 @@ class StoreOrder extends Model
             if ($hold) {
                 $hold->refundToBuyer($requestedBy ?? $this->order->user, $reason);
             }
+        });
+    }
+
+    /**
+     * Pembeli mengajukan komplain atas paket yang sudah dikirim/sampai. Dana
+     * escrow tetap ditahan (pencairan otomatis dilewati selama sengketa terbuka)
+     * sampai CS memutuskan lewat `Dispute::resolve()`.
+     *
+     * @throws LogicException kalau bukan pembelinya atau paketnya tidak bisa dikomplain.
+     */
+    public function openDispute(User $buyer, string $reason, string $description): Dispute
+    {
+        if ($this->order->user_id !== $buyer->id) {
+            throw new LogicException('Hanya pembeli pesanan ini yang bisa mengajukan komplain.');
+        }
+
+        $dispute = null;
+
+        $this->transitionTo('disputed', then: function () use ($buyer, $reason, $description, &$dispute): void {
+            $dispute = $this->disputes()->create([
+                'opened_by' => $buyer->id,
+                'reason' => $reason,
+                'description' => $description,
+                'status' => 'open',
+            ]);
+        });
+
+        return $dispute;
+    }
+
+    /**
+     * Sengketa paket ini yang masih berjalan (open/under_review), kalau ada.
+     */
+    public function openDisputeRecord(): ?Dispute
+    {
+        return $this->disputes()->whereIn('status', ['open', 'under_review'])->latest('id')->first();
+    }
+
+    /**
+     * Dipanggil `Dispute::resolve()` saat CS memenangkan pembeli: seluruh dana
+     * paket dikembalikan ke saldo pembeli. Barang ada di pembeli, jadi stok
+     * tidak dikembalikan.
+     */
+    public function refundForDispute(User $staff, string $reason): void
+    {
+        $this->transitionTo('refunded', then: function () use ($staff, $reason): void {
+            $this->escrowHold()->where('status', 'held')->first()?->refundToBuyer($staff, $reason);
         });
     }
 

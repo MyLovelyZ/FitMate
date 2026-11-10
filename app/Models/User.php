@@ -8,6 +8,7 @@ use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Attributes\Hidden;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Foundation\Auth\User as Authenticatable;
@@ -141,13 +142,15 @@ class User extends Authenticatable
         $shopping = [
             'Profil Saya' => 'profile',
             'Pesanan' => 'user.orders',
+            'Wishlist' => 'user.wishlist',
             'Keranjang' => 'user.cart',
+            'Chat CS' => 'user.chat',
         ];
 
         if ($this->role === 'seller') {
             $profile = $this->store?->needsProfile() ? ['Lengkapi Profil Toko' => 'stores.create'] : [];
 
-            return ['Dashboard Toko' => 'seller.dashboard'] + $profile + $shopping;
+            return ['Seller Center' => 'seller.dashboard'] + $profile + $shopping;
         }
 
         if ($this->role === 'user') {
@@ -226,10 +229,26 @@ class User extends Authenticatable
      *
      * @return array<string, string> Nama route => label.
      */
+    /**
+     * Navigasi Seller Center (tab area seller): nama route => label.
+     *
+     * @return array<string, string>
+     */
+    public function sellerAreaLinks(): array
+    {
+        return [
+            'seller.dashboard' => 'Dashboard',
+            'seller.products.index' => 'Produk',
+            'seller.products.create' => 'Tambah Produk',
+            'seller.orders.index' => 'Pesanan',
+        ];
+    }
+
     public function adminAreaLinks(): array
     {
         $links = [
             'admin.dashboard' => 'Dashboard',
+            'admin.transactions.index' => 'Transaksi',
             'admin.stores.index' => 'Toko',
             'admin.users.index' => 'Pengguna',
             'admin.products.index' => 'Produk',
@@ -375,6 +394,31 @@ class User extends Authenticatable
     public function cart(): HasOne
     {
         return $this->hasOne(Cart::class);
+    }
+
+    /**
+     * Produk yang disimpan pembeli, terbaru disimpan dulu.
+     */
+    public function wishlist(): BelongsToMany
+    {
+        return $this->belongsToMany(Product::class, 'wishlists')->withTimestamps()->orderByPivot('created_at', 'desc');
+    }
+
+    public function hasInWishlist(Product $product): bool
+    {
+        return $this->wishlist()->whereKey($product->id)->exists();
+    }
+
+    /**
+     * Menyimpan atau melepas produk dari wishlist.
+     *
+     * @return bool true kalau produknya sekarang ada di wishlist.
+     */
+    public function toggleWishlist(Product $product): bool
+    {
+        $changes = $this->wishlist()->toggle($product->id);
+
+        return $changes['attached'] !== [];
     }
 
     public function orders(): HasMany

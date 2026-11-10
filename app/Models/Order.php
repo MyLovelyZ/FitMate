@@ -14,10 +14,40 @@ use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
+use LogicException;
 
 class Order extends Model
 {
     use HasFactory;
+
+    /**
+     * Label `orders.status` mentah untuk back-office admin (pembeli melihat
+     * `BUYER_STATUS_GROUPS`, bukan ini).
+     *
+     * @var array<string, string>
+     */
+    public const STATUS_LABELS = [
+        'pending_payment' => 'Menunggu Pembayaran',
+        'paid' => 'Lunas',
+        'processing' => 'Diproses',
+        'shipped' => 'Dikirim',
+        'completed' => 'Selesai',
+        'cancelled' => 'Dibatalkan',
+        'expired' => 'Kedaluwarsa',
+        'refunded' => 'Dana Dikembalikan',
+    ];
+
+    /**
+     * Tombol ubah status di tabel transaksi admin: status tujuan => label tombol.
+     *
+     * @var array<string, string>
+     */
+    public const ADMIN_ACTIONS = [
+        'paid' => 'Set Lunas',
+        'shipped' => 'Set Dikirim',
+        'completed' => 'Set Selesai',
+        'cancelled' => 'Batalkan',
+    ];
 
     /**
      * Batas waktu bayar setelah checkout. Lewat dari ini scheduler
@@ -234,16 +264,18 @@ class Order extends Model
      * Membatalkan order yang belum dibayar — oleh pembeli (`cancelled`) atau
      * karena lewat batas bayar (`expired`). Stok semua paket dikembalikan.
      *
+     * `$reason` mengganti alasan bawaan, mis. saat dibatalkan admin.
+     *
      * @return bool false kalau order ternyata sudah tidak menunggu pembayaran.
      */
-    public function cancelUnpaid(string $status = 'cancelled'): bool
+    public function cancelUnpaid(string $status = 'cancelled', ?string $reason = null): bool
     {
-        return DB::transaction(function () use ($status): bool {
+        return DB::transaction(function () use ($status, $reason): bool {
             if (static::whereKey($this->id)->lockForUpdate()->value('status') !== 'pending_payment') {
                 return false;
             }
 
-            $reason = $status === 'expired'
+            $reason ??= $status === 'expired'
                 ? 'Batas waktu pembayaran lewat.'
                 : 'Dibatalkan pembeli sebelum dibayar.';
 
@@ -278,6 +310,92 @@ class Order extends Model
             });
 
         return $expired;
+    }
+
+    /**
+     * Tombol status yang sah untuk order ini di tabel transaksi admin.
+     *
+     * - Belum dibayar: konfirmasi lunas (transfer manual) atau batalkan.
+     * - Ada paket yang belum dikirim: kirim (sekaligus memproses) atau batalkan + refund.
+     * - Ada paket di jalan / sudah sampai: selesaikan dan cairkan dana seller.
+     *
+     * @return array<string, string> Subset `ADMIN_ACTIONS`.
+     */
+    public function adminActions(): array
+    {
+        if ($this->status === 'pending_payment') {
+            return array_intersect_key(self::ADMIN_ACTIONS, array_flip(['paid', 'cancelled']));
+        }
+
+        if (! $this->isPaid()) {
+            return [];
+        }
+
+        $statuses = $this->storeOrders->pluck('status');
+        $actions = [];
+
+        if ($statuses->contains(fn (string $status): bool => in_array($status, ['pending', 'processing'], true))) {
+            $actions[] = 'shipped';
+            $actions[] = 'cancelled';
+        }
+
+        if ($statuses->contains(fn (string $status): bool => in_array($status, ['shipped', 'delivered'], true))) {
+            $actions[] = 'completed';
+        }
+
+        return array_intersect_key(self::ADMIN_ACTIONS, array_flip($actions));
+    }
+
+    /**
+     * Admin mengubah status pesanan dari back-office. Tidak menulis kolom status
+     * langsung: setiap langkah lewat jalur yang sama dengan pembeli/seller
+     * (`Payment::settle`, `StoreOrder::process/ship/complete/cancel`), jadi
+     * escrow, stok, dan refund tetap konsisten.
+     *
+     * @throws LogicException kalau status tujuan tidak sah untuk order ini.
+     */
+    public function applyAdminStatus(string $status, User $admin, ?string $trackingNumber = null, ?string $reason = null): void
+    {
+        if (! array_key_exists($status, $this->adminActions())) {
+            throw new LogicException("Pesanan {$this->order_number} tidak bisa diubah ke \"".(self::STATUS_LABELS[$status] ?? $status).'" sekarang.');
+        }
+
+        DB::transaction(function () use ($status, $admin, $trackingNumber, $reason): void {
+            match ($status) {
+                'paid' => $this->confirmPaymentByAdmin($admin),
+                'shipped' => $this->storeOrders()->whereIn('status', ['pending', 'processing'])->get()
+                    ->each(function (StoreOrder $storeOrder) use ($trackingNumber): void {
+                        if ($storeOrder->status === 'pending') {
+                            $storeOrder->process();
+                        }
+
+                        $storeOrder->ship((string) $trackingNumber);
+                    }),
+                'completed' => $this->storeOrders()->whereIn('status', ['shipped', 'delivered'])->get()
+                    ->reject(fn (StoreOrder $storeOrder): bool => $storeOrder->hasOpenDispute())
+                    ->each(fn (StoreOrder $storeOrder) => $storeOrder->complete('admin_released')),
+                'cancelled' => $this->status === 'pending_payment'
+                    ? $this->cancelUnpaid('cancelled', 'Dibatalkan admin: '.$reason)
+                    : $this->storeOrders()->with('items')->get()
+                        ->filter(fn (StoreOrder $storeOrder): bool => $storeOrder->canTransitionTo('cancelled'))
+                        ->each(fn (StoreOrder $storeOrder) => $storeOrder->cancel('Dibatalkan admin: '.$reason, $admin)),
+            };
+        });
+
+        $this->refresh();
+    }
+
+    /**
+     * Konfirmasi transfer manual oleh admin. Memakai `Payment::settle()` yang
+     * sama dengan webhook, dengan event id sendiri supaya tetap idempotent.
+     */
+    protected function confirmPaymentByAdmin(User $admin): void
+    {
+        $payment = $this->payments()->where('status', 'pending')->latest('id')->first();
+
+        if (! $payment?->settle('admin-confirm-'.$payment->reference, ['confirmed_by' => $admin->id])) {
+            throw new LogicException("Pembayaran {$this->order_number} tidak bisa dikonfirmasi: batas bayar sudah lewat atau pesanan tidak lagi menunggu pembayaran.");
+        }
     }
 
     /**

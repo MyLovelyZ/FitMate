@@ -7,6 +7,7 @@ use Livewire\Attributes\Computed;
 use Livewire\Attributes\Locked;
 use Livewire\Attributes\Title;
 use Livewire\Attributes\Url;
+use Livewire\Attributes\Layout;
 use Livewire\Component;
 use Livewire\WithPagination;
 
@@ -15,7 +16,7 @@ use Livewire\WithPagination;
  * persentase (bisa dibatasi maksimal rupiah, mis. 10% maks. Rp5.000) atau
  * potongan rupiah, dengan kuota total ("100 orang pertama") dan batas per pembeli.
  */
-new #[Title('Kode Promo')] class extends Component
+new #[Layout('layouts::admin')] #[Title('Kode Promo')] class extends Component
 {
     use WithPagination;
 

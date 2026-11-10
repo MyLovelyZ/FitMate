@@ -1,11 +1,15 @@
 <?php
 
+use App\Models\Dispute;
 use App\Models\Order;
+use App\Models\OrderItem;
 use App\Models\Payment;
+use App\Models\ProductReview;
 use App\Models\Shipment;
 use App\Models\StoreOrder;
 use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Validation\Rule;
 use Illuminate\View\View;
 use Livewire\Attributes\Computed;
 use Livewire\Component;
@@ -15,6 +19,18 @@ new class extends Component
     public const PAYMENT_METHODS = Payment::METHOD_LABELS;
 
     public Order $order;
+
+    /** Isian form ulasan (satu form terbuka dalam satu waktu). */
+    public int $rating = 5;
+
+    public string $fitFeedback = '';
+
+    public string $reviewComment = '';
+
+    /** Isian form komplain. */
+    public string $disputeReason = 'not_as_described';
+
+    public string $disputeDescription = '';
 
     public function mount(Order $order): void
     {
@@ -33,7 +49,7 @@ new class extends Component
     public function storeOrders(): Collection
     {
         return $this->order->storeOrders()
-            ->with(['store', 'shipment', 'escrowHold', 'items.product.primaryImage', 'items.product.store'])
+            ->with(['store', 'shipment', 'escrowHold', 'items.product.primaryImage', 'items.product.store', 'items.review', 'disputes'])
             ->orderBy('id')
             ->get();
     }
@@ -157,6 +173,69 @@ new class extends Component
 
         $this->refreshOrder();
         $this->dispatch('notify', message: 'Terima kasih! Dana sudah diteruskan ke penjual.');
+    }
+
+    /**
+     * Ulasan untuk satu barang dari paket yang sudah selesai.
+     */
+    public function submitReview(int $itemId): void
+    {
+        $this->validate([
+            'rating' => ['required', 'integer', 'between:1,5'],
+            'fitFeedback' => ['nullable', Rule::in(array_keys(ProductReview::FIT_LABELS))],
+            'reviewComment' => ['nullable', 'string', 'max:1000'],
+        ], [
+            'rating.between' => 'Pilih 1 sampai 5 bintang.',
+            'rating.required' => 'Pilih jumlah bintang.',
+            'fitFeedback.in' => 'Pilihan ukuran tidak valid.',
+            'reviewComment.max' => 'Ulasan maksimal 1.000 karakter.',
+        ]);
+
+        $item = OrderItem::whereKey($itemId)
+            ->whereHas('storeOrder', fn ($query) => $query->where('order_id', $this->order->id))
+            ->first();
+
+        abort_if($item === null, 404);
+
+        ProductReview::submitFor($item, Auth::user(), $this->rating, $this->fitFeedback ?: null, $this->reviewComment);
+
+        $this->reset('rating', 'fitFeedback', 'reviewComment');
+        $this->refreshOrder();
+        $this->dispatch('notify', message: 'Terima kasih! Ulasanmu sudah tayang di halaman produk.');
+    }
+
+    /**
+     * Komplain atas paket yang sudah dikirim/sampai. Dana tetap ditahan
+     * FitMate sampai CS memutuskan.
+     */
+    public function openDispute(int $storeOrderId): void
+    {
+        $this->validate([
+            'disputeReason' => ['required', Rule::in(array_keys(Dispute::REASON_LABELS))],
+            'disputeDescription' => ['required', 'string', 'min:10', 'max:2000'],
+        ], [
+            'disputeReason.required' => 'Pilih alasan komplain.',
+            'disputeReason.in' => 'Alasan komplain tidak valid.',
+            'disputeDescription.required' => 'Ceritakan masalahnya.',
+            'disputeDescription.min' => 'Ceritakan masalahnya minimal 10 karakter.',
+            'disputeDescription.max' => 'Cerita maksimal 2.000 karakter.',
+        ]);
+
+        $storeOrder = $this->order->storeOrders()->whereKey($storeOrderId)->first();
+
+        abort_if($storeOrder === null, 404);
+
+        try {
+            $storeOrder->openDispute(Auth::user(), $this->disputeReason, trim($this->disputeDescription));
+        } catch (LogicException) {
+            $this->addError('disputeDescription', 'Paket ini tidak bisa dikomplain lagi.');
+
+            return;
+        }
+
+        $this->reset('disputeReason', 'disputeDescription');
+        $this->refreshOrder();
+        $this->dispatch('notify', message: 'Komplain terkirim. Dana ditahan FitMate sampai CS memutuskan.');
     }
 
     protected function refreshOrder(): void
@@ -312,6 +391,51 @@ new class extends Component
                         <p class="border-b border-line px-[18px] py-2.5 text-[12px] text-muted">Dibatalkan: {{ $storeOrder->note }}</p>
                     @endif
 
+                    {{-- Komplain: status sengketa yang berjalan/selesai, atau form untuk mengajukan. --}}
+                    @php($dispute = $storeOrder->disputes->sortByDesc('id')->first())
+                    @if ($dispute)
+                        <div @class([
+                            'border-b border-line px-[18px] py-3 text-[12.5px]',
+                            'bg-sale/5' => $dispute->isOpen(),
+                        ])>
+                            <p class="font-semibold">
+                                Komplain: {{ Dispute::REASON_LABELS[$dispute->reason] ?? $dispute->reason }}
+                                <span class="ml-1 rounded-[3px] bg-cream px-2 py-0.5 text-[11px]">{{ Dispute::STATUS_LABELS[$dispute->status] ?? $dispute->status }}</span>
+                            </p>
+                            <p class="mt-1 text-muted">{{ $dispute->description }}</p>
+                            @if ($dispute->isOpen())
+                                <p class="mt-1 text-muted">Dana paket ini ditahan FitMate sampai CS memutuskan.</p>
+                            @elseif ($dispute->resolution_note)
+                                <p class="mt-1">Keputusan CS: {{ $dispute->resolution_note }}</p>
+                            @endif
+                        </div>
+                    @elseif ($storeOrder->canTransitionTo('disputed'))
+                        <div x-data="{ open: false }" class="border-b border-line px-[18px] py-2.5">
+                            <button type="button" x-show="! open" x-on:click="open = true" class="cursor-pointer text-[12px] font-semibold text-muted transition-colors hover:text-sale">
+                                Ada masalah dengan paket ini? Ajukan komplain
+                            </button>
+
+                            <form x-show="open" x-cloak wire:submit="openDispute({{ $storeOrder->id }})" class="flex flex-col gap-2 py-1">
+                                <label for="disputeReason-{{ $storeOrder->id }}" class="text-[12px] font-semibold">Alasan</label>
+                                <select id="disputeReason-{{ $storeOrder->id }}" wire:model="disputeReason" class="h-10 rounded-[2px] border border-line bg-bg px-2 text-[12.5px]">
+                                    @foreach (Dispute::REASON_LABELS as $value => $label)
+                                        <option value="{{ $value }}" @selected($disputeReason === $value)>{{ $label }}</option>
+                                    @endforeach
+                                </select>
+
+                                <label for="disputeDescription-{{ $storeOrder->id }}" class="text-[12px] font-semibold">Ceritakan masalahnya</label>
+                                <textarea id="disputeDescription-{{ $storeOrder->id }}" rows="3" wire:model="disputeDescription" maxlength="2000" placeholder="Mis. jahitan lengan kiri lepas saat paket dibuka" class="rounded-[2px] border border-line bg-bg px-3 py-2 text-[13px] placeholder:text-muted">{{ $disputeDescription }}</textarea>
+                                @error('disputeReason') <p class="text-[12px] text-sale">{{ $message }}</p> @enderror
+                                @error('disputeDescription') <p class="text-[12px] text-sale">{{ $message }}</p> @enderror
+
+                                <div class="flex gap-2">
+                                    <button type="submit" class="cursor-pointer rounded-[2px] bg-sale px-4 py-2 text-[11px] font-bold uppercase tracking-[0.1em] text-cream hover:opacity-85">Kirim Komplain</button>
+                                    <button type="button" x-on:click="open = false" class="cursor-pointer px-3 text-[12px] font-semibold text-muted hover:text-ink">Batal</button>
+                                </div>
+                            </form>
+                        </div>
+                    @endif
+
                     @if (($shipment = $storeOrder->shipment) && $order->isPaid() && $storeOrder->status !== 'cancelled')
                         <div class="flex flex-wrap items-start justify-between gap-3 border-b border-line bg-bg/60 px-[18px] py-3 text-[12.5px]">
                             <div>
@@ -368,6 +492,72 @@ new class extends Component
                             </li>
                         @endforeach
                     </ul>
+
+                    {{-- Ulasan: dibuka setelah paket selesai, satu ulasan per barang. --}}
+                    @if ($storeOrder->status === 'completed')
+                        <div class="border-t border-line bg-bg/60 px-[18px] py-3">
+                            <p class="text-[11px] font-semibold uppercase tracking-[0.12em] text-muted">Ulasan</p>
+                            @error('review') <p class="mt-1 text-[12px] text-sale">{{ $message }}</p> @enderror
+
+                            <ul class="mt-2 flex flex-col gap-3">
+                                @foreach ($storeOrder->items as $item)
+                                    <li wire:key="review-item-{{ $item->id }}" class="text-[12.5px]">
+                                        @if ($item->review)
+                                            <p>
+                                                <span class="font-medium">{{ $item->product_name }}</span> &middot;
+                                                <span aria-label="{{ $item->review->rating }} dari 5 bintang">{{ str_repeat('★', $item->review->rating) }}</span>
+                                                @if ($item->review->fit_feedback)
+                                                    <span class="text-muted">&middot; Ukuran {{ strtolower(ProductReview::FIT_LABELS[$item->review->fit_feedback]) }}</span>
+                                                @endif
+                                            </p>
+                                            @if ($item->review->comment)
+                                                <p class="mt-0.5 text-muted">"{{ $item->review->comment }}"</p>
+                                            @endif
+                                        @elseif ($item->product_id)
+                                            <div x-data="{ open: false }">
+                                                <div class="flex flex-wrap items-center justify-between gap-2">
+                                                    <span class="font-medium">{{ $item->product_name }}</span>
+                                                    <button type="button" x-show="! open" x-on:click="open = true" class="cursor-pointer rounded-[2px] border border-line px-3 py-1.5 text-[11.5px] font-semibold transition-colors hover:border-ink">Beri Ulasan</button>
+                                                </div>
+
+                                                <form x-show="open" x-cloak wire:submit="submitReview({{ $item->id }})" class="mt-2 flex flex-col gap-2">
+                                                    <fieldset>
+                                                        <legend class="text-[12px] font-semibold">Bintang</legend>
+                                                        <div class="mt-1 flex gap-1">
+                                                            @foreach (range(1, 5) as $star)
+                                                                <label class="cursor-pointer">
+                                                                    <input type="radio" wire:model="rating" value="{{ $star }}" class="peer sr-only">
+                                                                    <span class="inline-flex size-9 items-center justify-center rounded-[2px] border border-line text-[13px] peer-checked:border-ink peer-checked:bg-ink peer-checked:text-cream">{{ $star }}★</span>
+                                                                </label>
+                                                            @endforeach
+                                                        </div>
+                                                    </fieldset>
+
+                                                    <label for="fit-{{ $item->id }}" class="text-[12px] font-semibold">Ukurannya terasa…</label>
+                                                    <select id="fit-{{ $item->id }}" wire:model="fitFeedback" class="h-10 rounded-[2px] border border-line bg-bg px-2 text-[12.5px]">
+                                                        <option value="">Tidak menjawab</option>
+                                                        @foreach (ProductReview::FIT_LABELS as $value => $label)
+                                                            <option value="{{ $value }}">{{ $label }}</option>
+                                                        @endforeach
+                                                    </select>
+
+                                                    <label for="comment-{{ $item->id }}" class="text-[12px] font-semibold">Ceritakan pengalamanmu (opsional)</label>
+                                                    <textarea id="comment-{{ $item->id }}" rows="2" wire:model="reviewComment" maxlength="1000" class="rounded-[2px] border border-line bg-bg px-3 py-2 text-[13px]"></textarea>
+                                                    @error('rating') <p class="text-[12px] text-sale">{{ $message }}</p> @enderror
+                                                    @error('reviewComment') <p class="text-[12px] text-sale">{{ $message }}</p> @enderror
+
+                                                    <div class="flex gap-2">
+                                                        <button type="submit" class="cursor-pointer rounded-[2px] bg-ink px-4 py-2 text-[11px] font-bold uppercase tracking-[0.1em] text-cream hover:opacity-85">Kirim Ulasan</button>
+                                                        <button type="button" x-on:click="open = false" class="cursor-pointer px-3 text-[12px] font-semibold text-muted hover:text-ink">Batal</button>
+                                                    </div>
+                                                </form>
+                                            </div>
+                                        @endif
+                                    </li>
+                                @endforeach
+                            </ul>
+                        </div>
+                    @endif
                 </section>
             @endforeach
         </div>

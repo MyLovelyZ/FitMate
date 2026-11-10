@@ -24,17 +24,23 @@ dataset('role pages', [
     'admin users' => ['admin', 'admin.users.index'],
     'admin products' => ['admin', 'admin.products.index'],
     'admin vouchers' => ['admin', 'admin.vouchers.index'],
+    'admin transactions' => ['admin', 'admin.transactions.index'],
+    'superadmin in admin transactions' => ['superAdmin', 'admin.transactions.index'],
     'superadmin in admin users' => ['superAdmin', 'admin.users.index'],
     'superadmin in admin vouchers' => ['superAdmin', 'admin.vouchers.index'],
     'cs dashboard' => ['customerService', 'cs.dashboard'],
     'cs chats' => ['customerService', 'cs.chats.index'],
     'cs tickets' => ['customerService', 'cs.tickets.index'],
+    'admin add product' => ['admin', 'admin.products.create'],
     'seller dashboard' => ['seller', 'seller.dashboard'],
     'seller products' => ['seller', 'seller.products.index'],
+    'seller add product' => ['seller', 'seller.products.create'],
     'seller orders' => ['seller', 'seller.orders.index'],
     'superadmin settings' => ['superAdmin', 'superadmin.settings'],
     'user orders' => [null, 'user.orders'],
     'user cart' => [null, 'user.cart'],
+    'user wishlist' => [null, 'user.wishlist'],
+    'user chat' => [null, 'user.chat'],
 ]);
 
 it('renders each role page for its own role', function (?string $state, string $routeName) {
@@ -52,7 +58,7 @@ it('keeps other roles out of a role area', function (string $routeName) {
     $buyer = User::factory()->create();
 
     $this->actingAs($buyer)->get(route($routeName))->assertRedirect('/');
-})->with(['admin.dashboard', 'admin.users.index', 'admin.products.index', 'admin.vouchers.index', 'cs.dashboard', 'seller.dashboard', 'superadmin.settings']);
+})->with(['admin.dashboard', 'admin.users.index', 'admin.products.index', 'admin.vouchers.index', 'admin.transactions.index', 'admin.products.create', 'cs.dashboard', 'cs.chats.index', 'seller.dashboard', 'seller.products.create', 'superadmin.settings']);
 
 it('keeps admins out of the superadmin settings', function () {
     $this->actingAs(User::factory()->admin()->create())

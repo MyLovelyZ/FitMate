@@ -44,7 +44,8 @@ new #[Title('Bantuan')] class extends Component
     public function contacts(): array
     {
         return [
-            'Pesanan Saya' => ['Bayar, batalkan, lacak paket, atau konfirmasi pesanan diterima.', 'user.orders', []],
+            'Chat dengan CS' => ['Tanya langsung soal ukuran, pesanan, atau pengiriman.', 'user.chat', []],
+            'Pesanan Saya' => ['Bayar, batalkan, lacak paket, ajukan komplain, atau konfirmasi pesanan diterima.', 'user.orders', []],
             'Ukuran Badan' => ['Perbarui ukuran badan yang dipakai saat memilih ukuran.', 'profile', ['tab' => 'ukuran']],
             'Buka Toko' => ['Ajukan toko atau cek status pengajuanmu.', 'stores.create', []],
         ];
@@ -82,7 +83,7 @@ new #[Title('Bantuan')] class extends Component
     <section id="kontak" class="mt-10 scroll-mt-[calc(var(--spacing-header)+16px)]">
         <h2 class="text-[12px] font-semibold uppercase tracking-[0.1em]">Masih Butuh Bantuan?</h2>
 
-        <ul class="mt-3 grid gap-3 sm:grid-cols-3">
+        <ul class="mt-3 grid gap-3 sm:grid-cols-2">
             @foreach ($this->contacts as $label => [$description, $routeName, $parameters])
                 <li wire:key="contact-{{ $routeName }}">
                     <a

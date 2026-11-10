@@ -680,7 +680,7 @@ new #[Title('Buka Toko')] class extends Component
                     @endif
 
                     <div class="mt-5 flex flex-wrap gap-2.5">
-                        <a href="{{ route('seller.dashboard') }}" wire:navigate class="inline-flex items-center rounded-[2px] bg-ink px-5 py-3 text-[11.5px] font-bold uppercase tracking-[0.1em] text-cream transition-opacity hover:opacity-85">Dashboard Toko</a>
+                        <a href="{{ route('seller.dashboard') }}" wire:navigate class="inline-flex items-center rounded-[2px] bg-ink px-5 py-3 text-[11.5px] font-bold uppercase tracking-[0.1em] text-cream transition-opacity hover:opacity-85">Seller Center</a>
                         @if ($store->canSell())
                             <a href="{{ route('stores.show', $store) }}" wire:navigate class="inline-flex items-center rounded-[2px] border border-line px-5 py-3 text-[11.5px] font-bold uppercase tracking-[0.1em] transition-colors hover:border-ink">Lihat Halaman Toko</a>
                         @endif

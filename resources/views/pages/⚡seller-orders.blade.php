@@ -55,9 +55,9 @@ new #[Title('Pesanan Toko')] class extends Component
 
 <div class="mx-auto max-w-[1280px] px-side pb-[clamp(48px,8vw,80px)] pt-[clamp(32px,6vw,56px)]">
     <x-ui.area-header
-        :breadcrumbs="['Beranda' => route('home'), 'Seller' => route('seller.dashboard'), 'Pesanan' => null]"
+        :breadcrumbs="['Beranda' => route('home'), 'Seller Center' => route('seller.dashboard'), 'Pesanan' => null]"
         title="Pesanan Toko"
-        :links="['seller.dashboard' => 'Dashboard', 'seller.products.index' => 'Produk', 'seller.orders.index' => 'Pesanan']"
+        :links="auth()->user()->sellerAreaLinks()"
     />
 
     <div class="mt-6">

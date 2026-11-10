@@ -1,6 +1,8 @@
 <?php
 
+use App\Http\Controllers\AdminController;
 use App\Http\Controllers\AuthController;
+use App\Http\Controllers\SellerProductController;
 use App\Http\Controllers\StoreIdentityCardController;
 use Illuminate\Support\Facades\Route;
 
@@ -23,11 +25,16 @@ Route::livewire('/toko/{store:slug}', 'pages::store-show')->name('stores.show');
 Route::middleware(['auth', 'user'])->group(function () {
     Route::livewire('/checkout', 'pages::checkout')->name('checkout');
     Route::livewire('/checkout/success/{order:order_number}', 'pages::checkout-success')->name('checkout.success');
+    // Nota pembeli; status & warnanya ikut berubah saat admin/seller mengubah pesanan.
+    Route::livewire('/berhasil/{order:order_number}', 'pages::berhasil')->name('orders.invoice');
 });
 
 Route::middleware('guest')->group(function () {
     Route::livewire('/login', 'pages::login')->name('login');
     Route::livewire('/register', 'pages::register')->name('register');
+    // Nama `password.reset` dipakai notifikasi reset bawaan Laravel untuk membuat link di email.
+    Route::livewire('/lupa-password', 'pages::forgot-password')->name('password.request');
+    Route::livewire('/reset-password/{token}', 'pages::reset-password')->name('password.reset');
 });
 
 Route::post('/logout', [AuthController::class, 'logout'])
@@ -59,18 +66,30 @@ Route::middleware(['auth', 'admin'])->prefix('admin')->as('admin.')->group(funct
     Route::livewire('/users/{user}', 'pages::admin-user-detail')->name('users.show');
     // Semua produk dari semua toko, termasuk yang nonaktif, diblokir, dan dihapus.
     Route::livewire('/products', 'pages::admin-products')->name('products.index');
+    // Tambah produk oleh admin atas nama toko: form multipart → AdminController@storeProduct.
+    Route::get('/products/create', [AdminController::class, 'createProduct'])->name('products.create');
+    Route::post('/products', [AdminController::class, 'storeProduct'])->name('products.store');
     Route::livewire('/vouchers', 'pages::admin-vouchers')->name('vouchers.index');
+    // Back-office transaksi: semua pesanan masuk dari semua toko + tombol ubah status.
+    Route::get('/transactions', [AdminController::class, 'transactions'])->name('transactions.index');
+    Route::post('/transactions/{order}/status', [AdminController::class, 'updateStatus'])->name('transactions.status');
 });
 
 Route::middleware(['auth', 'cs'])->prefix('cs')->as('cs.')->group(function () {
     Route::livewire('/dashboard', 'pages::cs-dashboard')->name('dashboard');
     Route::livewire('/chats', 'pages::cs-chats')->name('chats.index');
     Route::livewire('/tickets', 'pages::cs-tickets')->name('tickets.index');
+    Route::livewire('/tickets/{dispute}', 'pages::cs-ticket-detail')->name('tickets.show');
 });
 
 Route::middleware(['auth', 'seller'])->prefix('seller')->as('seller.')->group(function () {
     Route::livewire('/dashboard', 'pages::seller-dashboard')->name('dashboard');
     Route::livewire('/products', 'pages::seller-products')->name('products.index');
+    // Formulir produk = halaman Livewire; kirimannya (multipart, ada file foto) ke controller.
+    Route::livewire('/products/create', 'pages::seller-product-form')->name('products.create');
+    Route::post('/products', [SellerProductController::class, 'store'])->name('products.store');
+    Route::livewire('/products/{product:slug}/edit', 'pages::seller-product-form')->name('products.edit');
+    Route::put('/products/{product:slug}', [SellerProductController::class, 'update'])->name('products.update');
     Route::livewire('/orders', 'pages::seller-orders')->name('orders.index');
     Route::livewire('/orders/{storeOrder:store_order_number}', 'pages::seller-order-detail')->name('orders.show');
 });
@@ -85,4 +104,6 @@ Route::middleware(['auth', 'user'])->prefix('user')->as('user.')->group(function
     Route::livewire('/orders', 'pages::user-orders')->name('orders');
     Route::livewire('/orders/{order:order_number}', 'pages::user-order-detail')->name('orders.show');
     Route::livewire('/cart', 'pages::user-cart')->name('cart');
+    Route::livewire('/wishlist', 'pages::user-wishlist')->name('wishlist');
+    Route::livewire('/chat', 'pages::user-chat')->name('chat');
 });

@@ -1,5 +1,6 @@
 <?php
 
+use App\Models\ChatConversation;
 use App\Models\Dispute;
 use App\Models\Order;
 use Illuminate\Database\Eloquent\Collection;
@@ -18,6 +19,7 @@ new #[Title('Dashboard CS')] class extends Component
         return [
             'Tiket Baru' => number_format(Dispute::where('status', 'open')->count(), 0, ',', '.'),
             'Sedang Ditinjau' => number_format(Dispute::where('status', 'under_review')->count(), 0, ',', '.'),
+            'Chat Terbuka' => number_format(ChatConversation::where('status', 'open')->count(), 0, ',', '.'),
             'Menunggu Pembayaran' => number_format(Order::where('status', 'pending_payment')->count(), 0, ',', '.'),
         ];
     }
@@ -50,14 +52,14 @@ new #[Title('Dashboard CS')] class extends Component
     {{-- Hitungan tiket dimuat lazy supaya kerangka halaman tampil lebih dulu. --}}
     @island(name: 'stats', lazy: true)
         @placeholder
-            <section class="mt-6 grid grid-cols-2 gap-3 lg:grid-cols-3">
-                @foreach (range(1, 3) as $index)
+            <section class="mt-6 grid grid-cols-2 gap-3 lg:grid-cols-4">
+                @foreach (range(1, 4) as $index)
                     <x-ui.skeleton class="h-[86px]" />
                 @endforeach
             </section>
         @endplaceholder
 
-        <section class="mt-6 grid grid-cols-2 gap-3 lg:grid-cols-3">
+        <section class="mt-6 grid grid-cols-2 gap-3 lg:grid-cols-4">
             @foreach ($this->stats as $label => $value)
                 <x-ui.stat :label="$label" :value="$value" />
             @endforeach

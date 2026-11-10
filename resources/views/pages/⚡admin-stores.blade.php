@@ -5,10 +5,11 @@ use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Livewire\Attributes\Computed;
 use Livewire\Attributes\Title;
 use Livewire\Attributes\Url;
+use Livewire\Attributes\Layout;
 use Livewire\Component;
 use Livewire\WithPagination;
 
-new #[Title('Pengajuan & Toko')] class extends Component
+new #[Layout('layouts::admin')] #[Title('Pengajuan & Toko')] class extends Component
 {
     use WithPagination;
 
