@@ -111,3 +111,13 @@ it('keeps signed-in users away from the auth pages', function () {
     $this->actingAs($user)->get(route('login'))->assertRedirect();
     $this->actingAs($user)->get(route('register'))->assertRedirect();
 });
+
+it('renders auth pages without exposing CSS as page text', function (string $routeName, string $heading) {
+    $this->get(route($routeName))
+        ->assertOk()
+        ->assertSee($heading)
+        ->assertDontSee('.fit-auth-circle.top {', false);
+})->with([
+    'login' => ['login', 'Masuk'],
+    'register' => ['register', 'Buat Akun'],
+]);
