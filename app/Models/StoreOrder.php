@@ -37,7 +37,8 @@ class StoreOrder extends Model
     public const TRANSITIONS = [
         'pending' => ['processing', 'cancelled'],
         'processing' => ['shipped', 'cancelled'],
-        'shipped' => ['delivered', 'completed', 'disputed'],
+        // refunded: paket dikembalikan kurir ke penjual (`returnToSeller`).
+        'shipped' => ['delivered', 'completed', 'disputed', 'refunded'],
         'delivered' => ['completed', 'disputed'],
         'disputed' => ['completed', 'refunded'],
     ];
@@ -196,11 +197,13 @@ class StoreOrder extends Model
     }
 
     /**
-     * Seller menyerahkan paket ke kurir dan mengisi nomor resi.
+     * Seller menyerahkan paket ke kurir dan mengisi nomor resi. Status
+     * pengiriman jadi "Sudah Dijemput Kurir"; update berikutnya lewat
+     * `updateShipmentStatus()`.
      */
-    public function ship(string $trackingNumber): void
+    public function ship(string $trackingNumber, ?User $by = null): void
     {
-        $this->transitionTo('shipped', ['shipped_at' => now()], function () use ($trackingNumber): void {
+        $this->transitionTo('shipped', ['shipped_at' => now()], function () use ($trackingNumber, $by): void {
             $default = Shipment::OPTIONS[array_key_first(Shipment::OPTIONS)];
             $shipment = $this->shipment()->firstOrNew([], [
                 'courier' => $default['courier'],
@@ -210,21 +213,93 @@ class StoreOrder extends Model
 
             $shipment->fill([
                 'tracking_number' => $trackingNumber,
-                'status' => 'in_transit',
+                'status' => 'picked_up',
                 'shipped_at' => now(),
             ])->save();
+
+            $shipment->record('picked_up', "Paket diserahkan ke kurir {$shipment->courierLabel()} dengan nomor resi {$trackingNumber}.", $by, $this->store?->city);
         });
     }
 
     /**
-     * Kurir menandai paket sampai (sementara ditekan seller selama belum ada
+     * Paket sampai di alamat pembeli (sementara ditekan seller selama belum ada
      * integrasi kurir). Hitungan mundur pencairan otomatis escrow mulai di sini.
      */
-    public function markDelivered(): void
+    public function markDelivered(?User $by = null, ?string $note = null, ?string $location = null): void
     {
-        $this->transitionTo('delivered', ['delivered_at' => now()], function (): void {
+        $this->transitionTo('delivered', ['delivered_at' => now()], function () use ($by, $note, $location): void {
             $this->shipment()->update(['status' => 'delivered', 'delivered_at' => now()]);
+            $this->shipment?->record('delivered', filled($note) ? trim($note) : Shipment::DEFAULT_DESCRIPTIONS['delivered'], $by, $location);
             $this->escrowHold()->update(['auto_release_at' => now()->addDays(EscrowHold::AUTO_RELEASE_DAYS)]);
+        });
+    }
+
+    /**
+     * Seller memperbarui status pengiriman paket yang sedang di jalan:
+     * checkpoint "Dalam Perjalanan", "Gagal Dikirim", "Sudah Diterima", atau
+     * "Dikembalikan ke Penjual". Setiap update tercatat di riwayat pelacakan.
+     *
+     * @throws LogicException kalau paket tidak sedang dikirim atau statusnya tidak sah.
+     */
+    public function updateShipmentStatus(string $status, User $by, ?string $note = null, ?string $location = null): void
+    {
+        $shipment = $this->shipment;
+
+        if ($this->status !== 'shipped' || $shipment === null || ! array_key_exists($status, $shipment->nextStatuses())) {
+            throw new LogicException("Status pengiriman paket {$this->store_order_number} tidak bisa diubah ke \"".(Shipment::STATUS_LABELS[$status] ?? $status).'".');
+        }
+
+        if (in_array($status, ['failed', 'returned'], true) && blank($note)) {
+            throw new LogicException('Tulis alasan untuk status "'.Shipment::STATUS_LABELS[$status].'".');
+        }
+
+        match ($status) {
+            'delivered' => $this->markDelivered($by, $note, $location),
+            'returned' => $this->returnToSeller($by, trim((string) $note), $location),
+            default => DB::transaction(function () use ($shipment, $status, $by, $note, $location): void {
+                $shipment->update(['status' => $status]);
+                $shipment->record($status, filled($note) ? trim($note) : Shipment::DEFAULT_DESCRIPTIONS[$status], $by, $location);
+            }),
+        };
+
+        $this->unsetRelation('shipment');
+    }
+
+    /**
+     * Memperbaiki nomor resi yang salah ketik selama paket masih di jalan.
+     */
+    public function correctTrackingNumber(string $trackingNumber, User $by): void
+    {
+        $shipment = $this->shipment;
+
+        if ($this->status !== 'shipped' || $shipment === null) {
+            throw new LogicException('Nomor resi hanya bisa diubah selama paket dikirim.');
+        }
+
+        DB::transaction(function () use ($shipment, $trackingNumber, $by): void {
+            $shipment->update(['tracking_number' => $trackingNumber]);
+            $shipment->record($shipment->status, "Nomor resi diperbarui menjadi {$trackingNumber}.", $by);
+        });
+    }
+
+    /**
+     * Kurir mengembalikan paket ke penjual (alamat tidak ditemukan, ditolak,
+     * dsb.). Barang kembali ke stok dan seluruh dana paket dikembalikan ke
+     * saldo pembeli.
+     */
+    public function returnToSeller(User $by, string $reason, ?string $location = null): void
+    {
+        $this->transitionTo('refunded', ['note' => 'Paket dikembalikan ke penjual: '.$reason], function () use ($by, $reason, $location): void {
+            $this->shipment()->update(['status' => 'returned']);
+            $this->shipment?->record('returned', $reason, $by, $location);
+
+            foreach ($this->items as $item) {
+                if ($item->product_variant_id !== null) {
+                    ProductVariant::whereKey($item->product_variant_id)->increment('stock', $item->quantity);
+                }
+            }
+
+            $this->escrowHold()->where('status', 'held')->first()?->refundToBuyer($by, 'Paket dikembalikan ke penjual: '.$reason);
         });
     }
 
@@ -242,9 +317,12 @@ class StoreOrder extends Model
         }
 
         $this->transitionTo('completed', $attributes, function () use ($reason): void {
-            $this->shipment()
-                ->where('status', '!=', 'delivered')
-                ->update(['status' => 'delivered', 'delivered_at' => now()]);
+            $shipment = $this->shipment()->first();
+
+            if ($shipment && $shipment->status !== 'delivered') {
+                $shipment->update(['status' => 'delivered', 'delivered_at' => now()]);
+                $shipment->record('delivered', $reason === 'buyer_confirmed' ? 'Pembeli mengonfirmasi pesanan sudah diterima.' : Shipment::DEFAULT_DESCRIPTIONS['delivered']);
+            }
 
             $this->escrowHold()->first()?->release($reason);
         });

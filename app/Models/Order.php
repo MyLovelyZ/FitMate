@@ -364,12 +364,12 @@ class Order extends Model
             match ($status) {
                 'paid' => $this->confirmPaymentByAdmin($admin),
                 'shipped' => $this->storeOrders()->whereIn('status', ['pending', 'processing'])->get()
-                    ->each(function (StoreOrder $storeOrder) use ($trackingNumber): void {
+                    ->each(function (StoreOrder $storeOrder) use ($trackingNumber, $admin): void {
                         if ($storeOrder->status === 'pending') {
                             $storeOrder->process();
                         }
 
-                        $storeOrder->ship((string) $trackingNumber);
+                        $storeOrder->ship((string) $trackingNumber, $admin);
                     }),
                 'completed' => $this->storeOrders()->whereIn('status', ['shipped', 'delivered'])->get()
                     ->reject(fn (StoreOrder $storeOrder): bool => $storeOrder->hasOpenDispute())

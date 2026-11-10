@@ -33,7 +33,7 @@ new class extends Component
     #[Computed]
     public function packages(): Collection
     {
-        return $this->order->storeOrders()->with(['store', 'items', 'shipment'])->orderBy('id')->get();
+        return $this->order->storeOrders()->with(['store', 'items', 'shipment.events'])->orderBy('id')->get();
     }
 
     #[Computed]
@@ -110,6 +110,15 @@ new class extends Component
                             &middot; Resi <span class="font-semibold text-ink">{{ $package->shipment->tracking_number }}</span>
                         @endif
                     </p>
+
+                    @if ($lastEvent = $package->shipment->events->first())
+                        <p class="mt-0.5 text-[12px] text-muted">
+                            Update terakhir ({{ $lastEvent->created_at->format('d M Y, H:i') }}): {{ $lastEvent->description }}
+                            @if ($lastEvent->location)
+                                &middot; {{ $lastEvent->location }}
+                            @endif
+                        </p>
+                    @endif
                 @endif
             </div>
         @endforeach

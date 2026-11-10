@@ -5,6 +5,7 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class Shipment extends Model
 {
@@ -61,10 +62,80 @@ class Shipment extends Model
         ];
     }
 
+    /**
+     * Update status pengiriman yang boleh dilakukan seller setelah paket
+     * diserahkan ke kurir: status sekarang => status berikutnya.
+     *
+     * - `in_transit` → `in_transit`: checkpoint baru (mis. "Tiba di gudang Bandung").
+     * - `failed` = percobaan antar gagal; bisa dikirim ulang atau dikembalikan.
+     * - `delivered` dan `returned` adalah akhir; lihat `StoreOrder::updateShipmentStatus()`.
+     *
+     * @var array<string, array<int, string>>
+     */
+    public const SELLER_TRANSITIONS = [
+        'picked_up' => ['in_transit', 'delivered', 'failed'],
+        'in_transit' => ['in_transit', 'delivered', 'failed'],
+        'failed' => ['in_transit', 'returned'],
+    ];
+
+    /**
+     * Keterangan bawaan di riwayat pelacakan kalau seller tidak menulis catatan.
+     *
+     * @var array<string, string>
+     */
+    public const DEFAULT_DESCRIPTIONS = [
+        'in_transit' => 'Paket dalam perjalanan.',
+        'delivered' => 'Paket sudah diterima di alamat tujuan.',
+        'failed' => 'Paket gagal diantar.',
+        'returned' => 'Paket dikembalikan ke penjual.',
+    ];
+
+    /**
+     * Status pengiriman berikutnya yang boleh dipilih seller.
+     *
+     * @return array<string, string> status => label
+     */
+    public function nextStatuses(): array
+    {
+        return array_intersect_key(self::STATUS_LABELS, array_flip(self::SELLER_TRANSITIONS[$this->status] ?? []));
+    }
+
+    /**
+     * Mencatat satu baris riwayat pelacakan.
+     */
+    public function record(string $status, string $description, ?User $by = null, ?string $location = null): ShipmentEvent
+    {
+        return $this->events()->create([
+            'status' => $status,
+            'description' => $description,
+            'location' => filled($location) ? trim($location) : null,
+            'recorded_by' => $by?->id,
+        ]);
+    }
+
+    public function courierLabel(): string
+    {
+        foreach (self::OPTIONS as $option) {
+            if ($option['courier'] === $this->courier && $option['service'] === $this->service) {
+                return $option['label'];
+            }
+        }
+
+        return strtoupper($this->courier).($this->service ? ' '.strtoupper($this->service) : '');
+    }
+
     // relationships
 
     public function storeOrder(): BelongsTo
     {
         return $this->belongsTo(StoreOrder::class);
+    }
+
+    /**
+     * Riwayat pelacakan, terbaru di atas.
+     */
+    public function events(): HasMany
+    {
+        return $this->hasMany(ShipmentEvent::class)->latest()->latest('id');
     }
 }

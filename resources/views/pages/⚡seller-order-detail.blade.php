@@ -29,6 +29,12 @@ new class extends Component
 
     public string $cancelReason = '';
 
+    public string $shipmentStatus = '';
+
+    public string $shipmentLocation = '';
+
+    public string $shipmentNote = '';
+
     public function mount(StoreOrder $storeOrder): void
     {
         // 404, bukan 403: seller tidak perlu tahu nomor paket toko lain itu ada.
@@ -36,6 +42,21 @@ new class extends Component
 
         $this->storeOrder = $storeOrder;
         $this->trackingNumber = (string) $storeOrder->shipment?->tracking_number;
+    }
+
+    /**
+     * Status pengiriman yang bisa dipilih seller sekarang.
+     *
+     * @return array<string, string>
+     */
+    #[Computed]
+    public function shipmentOptions(): array
+    {
+        if ($this->storeOrder->status !== 'shipped') {
+            return [];
+        }
+
+        return $this->storeOrder->shipment?->nextStatuses() ?? [];
     }
 
     /**
@@ -80,7 +101,7 @@ new class extends Component
 
         $this->validate(['trackingNumber' => ['required', 'string', 'max:64']], attributes: ['trackingNumber' => 'nomor resi']);
 
-        $this->storeOrder->ship(trim($this->trackingNumber));
+        $this->storeOrder->ship(trim($this->trackingNumber), Auth::user());
 
         $this->refreshStoreOrder('Paket ditandai dikirim.');
     }
@@ -92,9 +113,65 @@ new class extends Component
     {
         abort_unless($this->storeOrder->canTransitionTo('delivered'), 403);
 
-        $this->storeOrder->markDelivered();
+        $this->storeOrder->markDelivered(Auth::user());
 
         $this->refreshStoreOrder('Paket ditandai sudah sampai.');
+    }
+
+    /**
+     * Seller memperbarui status pengiriman (checkpoint perjalanan, gagal antar,
+     * sampai, atau dikembalikan). Tercatat di riwayat pelacakan pembeli.
+     */
+    public function updateShipment(): void
+    {
+        $options = $this->shipmentOptions;
+
+        abort_if($options === [], 403);
+
+        $this->validate([
+            'shipmentStatus' => ['required', 'in:'.implode(',', array_keys($options))],
+            'shipmentLocation' => ['nullable', 'string', 'max:120'],
+            'shipmentNote' => ['nullable', 'required_if:shipmentStatus,failed,returned', 'string', 'max:255'],
+        ], [
+            'shipmentStatus.required' => 'Pilih status pengiriman.',
+            'shipmentStatus.in' => 'Status pengiriman tidak valid.',
+            'shipmentLocation.max' => 'Lokasi maksimal 120 karakter.',
+            'shipmentNote.required_if' => 'Tulis alasannya untuk status ini.',
+            'shipmentNote.max' => 'Keterangan maksimal 255 karakter.',
+        ]);
+
+        $label = $options[$this->shipmentStatus];
+
+        try {
+            $this->storeOrder->updateShipmentStatus($this->shipmentStatus, Auth::user(), $this->shipmentNote, $this->shipmentLocation);
+        } catch (LogicException $exception) {
+            $this->addError('shipmentStatus', $exception->getMessage());
+
+            return;
+        }
+
+        $this->reset('shipmentStatus', 'shipmentLocation', 'shipmentNote');
+        $this->refreshStoreOrder('Status pengiriman diperbarui: '.$label.'.');
+    }
+
+    public function correctTrackingNumber(): void
+    {
+        abort_unless($this->storeOrder->status === 'shipped', 403);
+
+        $this->validate(['trackingNumber' => ['required', 'string', 'max:64']], [
+            'trackingNumber.required' => 'Nomor resi wajib diisi.',
+            'trackingNumber.max' => 'Nomor resi maksimal 64 karakter.',
+        ]);
+
+        $trackingNumber = trim($this->trackingNumber);
+
+        if ($trackingNumber === $this->storeOrder->shipment?->tracking_number) {
+            return;
+        }
+
+        $this->storeOrder->correctTrackingNumber($trackingNumber, Auth::user());
+
+        $this->refreshStoreOrder('Nomor resi diperbarui.');
     }
 
     public function cancel(): void
@@ -113,7 +190,7 @@ new class extends Component
     {
         $this->storeOrder->refresh();
 
-        unset($this->items, $this->courierLabel);
+        unset($this->items, $this->courierLabel, $this->shipmentOptions);
 
         $this->dispatch('notify', message: $message);
     }
@@ -191,15 +268,96 @@ new class extends Component
                             @error('trackingNumber') <p class="text-[12px] text-sale">{{ $message }}</p> @enderror
                         </form>
                     @elseif ($storeOrder->status === 'shipped')
-                        <p class="text-muted">Paket dalam perjalanan. Pembeli bisa menekan "Pesanan Diterima" kapan saja.</p>
-                        <button
-                            type="button"
-                            wire:click="markDelivered"
-                            wire:confirm="Tandai paket ini sudah sampai di alamat pembeli?"
-                            class="mt-3 inline-flex items-center justify-center rounded-[2px] border border-line px-5 py-3 text-[11.5px] font-bold uppercase tracking-[0.1em] transition-colors hover:border-ink"
-                        >
-                            Tandai Sudah Sampai (Simulasi Kurir)
-                        </button>
+                        <p class="text-muted">
+                            Paket dalam perjalanan ({{ Shipment::STATUS_LABELS[$storeOrder->shipment?->status] ?? 'dikirim' }}).
+                            Perbarui statusnya di bawah supaya pembeli bisa melacak. Pembeli juga bisa menekan "Pesanan Diterima" kapan saja.
+                        </p>
+
+                        @if ($this->shipmentOptions !== [])
+                            <form wire:submit="updateShipment" class="mt-4 flex flex-col gap-3 rounded-[2px] border border-line bg-bg p-4">
+                                <p class="text-[12px] font-semibold uppercase tracking-[0.1em]">Update Status Pengiriman</p>
+
+                                <div class="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                                    <div class="flex flex-col gap-1.5">
+                                        <label for="shipmentStatus" class="text-[12px] font-semibold">Status baru</label>
+                                        <select
+                                            id="shipmentStatus"
+                                            wire:model.live="shipmentStatus"
+                                            class="h-11 rounded-[2px] border border-line bg-surface px-3 text-[13px] outline-none transition-colors focus:border-ink"
+                                        >
+                                            <option value="">Pilih status</option>
+                                            @foreach ($this->shipmentOptions as $value => $label)
+                                                <option value="{{ $value }}" @selected($shipmentStatus === $value)>{{ $label }}</option>
+                                            @endforeach
+                                        </select>
+                                        @error('shipmentStatus') <p class="text-[12px] text-sale">{{ $message }}</p> @enderror
+                                    </div>
+
+                                    <div class="flex flex-col gap-1.5">
+                                        <label for="shipmentLocation" class="text-[12px] font-semibold">Lokasi <span class="font-normal text-muted">(opsional)</span></label>
+                                        <input
+                                            id="shipmentLocation"
+                                            type="text"
+                                            wire:model="shipmentLocation"
+                                            value="{{ $shipmentLocation }}"
+                                            maxlength="120"
+                                            placeholder="Mis. Gudang JNE Bandung"
+                                            class="h-11 rounded-[2px] border border-line bg-surface px-3 text-[13px] outline-none transition-colors placeholder:text-muted focus:border-ink"
+                                        >
+                                        @error('shipmentLocation') <p class="text-[12px] text-sale">{{ $message }}</p> @enderror
+                                    </div>
+                                </div>
+
+                                <div class="flex flex-col gap-1.5">
+                                    <label for="shipmentNote" class="text-[12px] font-semibold">
+                                        Keterangan
+                                        <span class="font-normal text-muted">{{ in_array($shipmentStatus, ['failed', 'returned'], true) ? '(wajib, dibaca pembeli)' : '(opsional, dibaca pembeli)' }}</span>
+                                    </label>
+                                    <textarea
+                                        id="shipmentNote"
+                                        rows="2"
+                                        wire:model="shipmentNote"
+                                        maxlength="255"
+                                        placeholder="Mis. Paket tiba di gudang transit"
+                                        class="w-full rounded-[2px] border border-line bg-surface px-3 py-2.5 text-[13px] outline-none transition-colors placeholder:text-muted focus:border-ink"
+                                    >{{ $shipmentNote }}</textarea>
+                                    @error('shipmentNote') <p class="text-[12px] text-sale">{{ $message }}</p> @enderror
+                                </div>
+
+                                @if ($shipmentStatus === 'returned')
+                                    <p class="text-[12px] text-sale">Paket yang dikembalikan membatalkan pesanan ini: stok kembali dan seluruh dana dikembalikan ke saldo pembeli.</p>
+                                @endif
+
+                                <div>
+                                    <x-ui.save-button target="updateShipment">Simpan Status</x-ui.save-button>
+                                </div>
+                            </form>
+                        @endif
+
+                        <form wire:submit="correctTrackingNumber" class="mt-3 flex flex-col gap-1.5" x-data="{ editing: false }">
+                            <button
+                                type="button"
+                                x-show="! editing"
+                                x-on:click="editing = true"
+                                class="cursor-pointer self-start text-[12px] font-semibold text-muted transition-colors hover:text-ink"
+                            >
+                                Salah input nomor resi? Ubah resi
+                            </button>
+
+                            <div x-show="editing" x-cloak class="flex flex-wrap gap-2">
+                                <input
+                                    type="text"
+                                    wire:model="trackingNumber"
+                                    value="{{ $trackingNumber }}"
+                                    maxlength="64"
+                                    aria-label="Nomor resi baru"
+                                    class="h-10 min-w-0 flex-1 rounded-[2px] border border-line bg-bg px-3 text-[13px] outline-none transition-colors focus:border-ink"
+                                >
+                                <button type="submit" class="cursor-pointer rounded-[2px] border border-line px-4 text-[11px] font-bold uppercase tracking-[0.1em] transition-colors hover:border-ink">Simpan Resi</button>
+                                <button type="button" x-on:click="editing = false" class="cursor-pointer px-2 text-[12px] font-semibold text-muted hover:text-ink">Batal</button>
+                            </div>
+                            @error('trackingNumber') <p class="text-[12px] text-sale">{{ $message }}</p> @enderror
+                        </form>
                     @elseif ($storeOrder->status === 'delivered')
                         <p class="text-muted">
                             Paket sudah sampai, menunggu konfirmasi pembeli.
@@ -217,6 +375,8 @@ new class extends Component
                         <p class="mt-2 text-muted">
                             {{ $dispute->isOpen() ? 'CS FitMate sedang meninjau. Dana paket ini ditahan sampai ada keputusan.' : 'Keputusan CS: '.$dispute->resolution_note }}
                         </p>
+                    @elseif ($storeOrder->status === 'refunded')
+                        <p class="text-muted">{{ $storeOrder->note ?? 'Dana paket ini dikembalikan ke pembeli.' }}</p>
                     @else
                         <p class="text-muted">{{ StoreOrder::BUYER_STATUS_LABELS[$storeOrder->status] ?? $storeOrder->status }}.</p>
                     @endif
@@ -317,6 +477,13 @@ new class extends Component
                             </div>
                         @endif
                     </dl>
+
+                    @if ($shipment->events->isNotEmpty())
+                        <div class="mt-3 border-t border-line pt-3">
+                            <h3 class="mb-3 text-[11.5px] font-semibold uppercase tracking-[0.1em] text-muted">Riwayat Pengiriman</h3>
+                            <x-ui.shipment-timeline :shipment="$shipment" />
+                        </div>
+                    @endif
                 @endif
             </section>
 

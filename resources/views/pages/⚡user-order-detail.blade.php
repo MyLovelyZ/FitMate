@@ -49,7 +49,7 @@ new class extends Component
     public function storeOrders(): Collection
     {
         return $this->order->storeOrders()
-            ->with(['store', 'shipment', 'escrowHold', 'items.product.primaryImage', 'items.product.store', 'items.review', 'disputes'])
+            ->with(['store', 'shipment.events', 'escrowHold', 'items.product.primaryImage', 'items.product.store', 'items.review', 'disputes'])
             ->orderBy('id')
             ->get();
     }
@@ -469,6 +469,17 @@ new class extends Component
                                 </div>
                             @endif
                         </div>
+
+                        @if ($shipment->events->isNotEmpty())
+                            <details class="group border-b border-line px-[18px] py-3" @if ($storeOrder->status === 'shipped') open @endif>
+                                <summary class="cursor-pointer list-none text-[12px] font-semibold text-muted transition-colors hover:text-ink">
+                                    Lacak Paket
+                                    <span class="group-open:hidden">({{ $shipment->events->count() }} update) ▾</span>
+                                    <span class="hidden group-open:inline">▴</span>
+                                </summary>
+                                <x-ui.shipment-timeline :shipment="$shipment" class="mt-3" />
+                            </details>
+                        @endif
                     @endif
 
                     <ul class="divide-y divide-line">
