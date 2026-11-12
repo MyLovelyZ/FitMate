@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Notifications\PackageStatusChanged;
 use Closure;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
@@ -171,6 +172,70 @@ class StoreOrder extends Model
         return $storeOrder;
     }
 
+    /**
+     * Status pesanan yang bisa dipilih seller lewat "Ubah Status".
+     *
+     * @var array<string, string>
+     */
+    public const SELLER_STATUS_LABELS = [
+        'processing' => 'Dikemas',
+        'shipped' => 'Dikirim',
+        'delivered' => 'Sudah Sampai',
+        'cancelled' => 'Dibatalkan',
+    ];
+
+    /**
+     * Pilihan "Ubah Status" untuk seller dari status sekarang. Paket yang belum
+     * dibayar tidak bisa diubah; update perjalanan paket (transit, gagal,
+     * dikembalikan) ada di `updateShipmentStatus()`.
+     *
+     * @return array<string, string> status => label
+     */
+    public function sellerStatusOptions(): array
+    {
+        $next = match ($this->status) {
+            'pending' => $this->isAwaitingPayment() ? [] : ['processing', 'cancelled'],
+            'processing' => ['shipped', 'cancelled'],
+            'shipped' => ['delivered'],
+            default => [],
+        };
+
+        return array_intersect_key(self::SELLER_STATUS_LABELS, array_flip($next));
+    }
+
+    /**
+     * Seller mengubah status pesanan: Dikemas, Dikirim (wajib resi), Sudah
+     * Sampai, atau Dibatalkan (wajib alasan). Diteruskan ke metode transisi
+     * masing-masing, jadi stok, escrow, dan notifikasi pembeli tetap konsisten.
+     *
+     * @throws LogicException kalau bukan paket tokonya atau statusnya tidak sah.
+     */
+    public function changeStatusBySeller(string $status, User $seller, ?string $trackingNumber = null, ?string $reason = null): void
+    {
+        if ($this->store_id !== $seller->store?->id) {
+            throw new LogicException('Paket ini bukan milik tokomu.');
+        }
+
+        if (! array_key_exists($status, $this->sellerStatusOptions())) {
+            throw new LogicException("Paket {$this->store_order_number} tidak bisa diubah ke \"".(self::SELLER_STATUS_LABELS[$status] ?? $status).'" sekarang.');
+        }
+
+        if ($status === 'shipped' && blank($trackingNumber)) {
+            throw new LogicException('Nomor resi wajib diisi untuk status Dikirim.');
+        }
+
+        if ($status === 'cancelled' && blank($reason)) {
+            throw new LogicException('Alasan pembatalan wajib diisi.');
+        }
+
+        match ($status) {
+            'processing' => $this->process(),
+            'shipped' => $this->ship(trim((string) $trackingNumber), $seller),
+            'delivered' => $this->markDelivered($seller),
+            'cancelled' => $this->cancel('Dibatalkan penjual: '.trim((string) $reason), $seller),
+        };
+    }
+
     public function canTransitionTo(string $status): bool
     {
         return in_array($status, self::TRANSITIONS[$this->status] ?? [], true);
@@ -334,7 +399,10 @@ class StoreOrder extends Model
      */
     public function cancel(string $reason, ?User $requestedBy = null): void
     {
-        $this->transitionTo('cancelled', ['note' => $reason], function () use ($reason, $requestedBy): void {
+        // Pembeli yang membatalkan sendiri tidak perlu dikabari.
+        $notifyBuyer = $requestedBy === null || $requestedBy->id !== $this->order->user_id;
+
+        $this->transitionTo('cancelled', ['note' => $reason], notifyBuyer: $notifyBuyer, then: function () use ($reason, $requestedBy): void {
             foreach ($this->items as $item) {
                 if ($item->product_variant_id !== null) {
                     ProductVariant::whereKey($item->product_variant_id)->increment('stock', $item->quantity);
@@ -403,9 +471,9 @@ class StoreOrder extends Model
      *
      * @param  array<string, mixed>  $attributes
      */
-    protected function transitionTo(string $status, array $attributes = [], ?Closure $then = null): void
+    protected function transitionTo(string $status, array $attributes = [], ?Closure $then = null, bool $notifyBuyer = true): void
     {
-        DB::transaction(function () use ($status, $attributes, $then): void {
+        DB::transaction(function () use ($status, $attributes, $then, $notifyBuyer): void {
             $this->status = static::whereKey($this->id)->lockForUpdate()->value('status');
 
             if (! $this->canTransitionTo($status)) {
@@ -419,6 +487,11 @@ class StoreOrder extends Model
             }
 
             $this->order->refresh()->syncStatusFromStores();
+
+            // Ditulis di dalam transaksi: kalau transisinya batal, notifikasinya ikut batal.
+            if ($notifyBuyer && array_key_exists($status, PackageStatusChanged::TITLES)) {
+                $this->order->user?->notify(PackageStatusChanged::for($this));
+            }
         });
     }
 

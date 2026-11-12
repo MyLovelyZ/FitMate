@@ -264,13 +264,14 @@ class Order extends Model
      * Membatalkan order yang belum dibayar — oleh pembeli (`cancelled`) atau
      * karena lewat batas bayar (`expired`). Stok semua paket dikembalikan.
      *
-     * `$reason` mengganti alasan bawaan, mis. saat dibatalkan admin.
+     * `$reason` mengganti alasan bawaan, mis. saat dibatalkan admin. `$by` =
+     * yang membatalkan; pembeli yang membatalkan sendiri tidak dikirimi notifikasi.
      *
      * @return bool false kalau order ternyata sudah tidak menunggu pembayaran.
      */
-    public function cancelUnpaid(string $status = 'cancelled', ?string $reason = null): bool
+    public function cancelUnpaid(string $status = 'cancelled', ?string $reason = null, ?User $by = null): bool
     {
-        return DB::transaction(function () use ($status, $reason): bool {
+        return DB::transaction(function () use ($status, $reason, $by): bool {
             if (static::whereKey($this->id)->lockForUpdate()->value('status') !== 'pending_payment') {
                 return false;
             }
@@ -281,7 +282,7 @@ class Order extends Model
 
             foreach ($this->storeOrders()->with('items')->get() as $storeOrder) {
                 if ($storeOrder->canTransitionTo('cancelled')) {
-                    $storeOrder->cancel($reason);
+                    $storeOrder->cancel($reason, $by);
                 }
             }
 

@@ -142,6 +142,7 @@ class User extends Authenticatable
         $shopping = [
             'Profil Saya' => 'profile',
             'Pesanan' => 'user.orders',
+            'Notifikasi' => 'user.notifications',
             'Wishlist' => 'user.wishlist',
             'Keranjang' => 'user.cart',
             'Chat CS' => 'user.chat',

@@ -71,11 +71,11 @@ function fakePublicPath(): string
 
 /**
  * Pesanan pembeli berisi 1 barang Rp100.000 (stok awal 5) yang sudah dibayar
- * dan dikirim penjual — titik awal untuk ulasan dan komplain.
+ * tapi belum diproses penjual — titik awal untuk "Ubah Status" dan notifikasi.
  *
  * @return array{order: Order, package: StoreOrder, variant: ProductVariant}
  */
-function shippedOrderFor(User $buyer): array
+function paidOrderFor(User $buyer): array
 {
     $variant = ProductVariant::factory()->create(['stock' => 5, 'price' => 100000]);
     Cart::forUser($buyer)->items()->create(['product_variant_id' => $variant->id, 'quantity' => 1]);
@@ -92,7 +92,19 @@ function shippedOrderFor(User $buyer): array
     $payment = $order->payments()->sole();
     $payment->settle(Payment::SIMULATOR.'-'.$payment->reference);
 
-    $package = $order->storeOrders()->sole();
+    return ['order' => $order->refresh(), 'package' => $order->storeOrders()->sole(), 'variant' => $variant];
+}
+
+/**
+ * Seperti `paidOrderFor()`, tapi paketnya sudah dikemas dan dikirim dengan
+ * resi JNE0001 — titik awal untuk ulasan, komplain, dan pelacakan.
+ *
+ * @return array{order: Order, package: StoreOrder, variant: ProductVariant}
+ */
+function shippedOrderFor(User $buyer): array
+{
+    ['order' => $order, 'package' => $package, 'variant' => $variant] = paidOrderFor($buyer);
+
     $package->process();
     $package->ship('JNE0001');
 

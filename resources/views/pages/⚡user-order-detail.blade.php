@@ -38,6 +38,9 @@ new class extends Component
         abort_unless($order->user_id === Auth::id(), 404);
 
         $this->order = $order;
+
+        // Membuka pesanannya = sudah membaca kabar statusnya.
+        Auth::user()->unreadNotifications()->where('data->order_id', $order->id)->update(['read_at' => now()]);
     }
 
     /**
@@ -152,7 +155,7 @@ new class extends Component
 
     public function cancelOrder(): void
     {
-        if ($this->order->cancelUnpaid()) {
+        if ($this->order->cancelUnpaid(by: Auth::user())) {
             $this->dispatch('notify', message: 'Pesanan dibatalkan dan stok dikembalikan.');
         }
 

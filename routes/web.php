@@ -104,6 +104,7 @@ Route::middleware(['auth', 'user'])->prefix('user')->as('user.')->group(function
     Route::livewire('/orders', 'pages::user-orders')->name('orders');
     Route::livewire('/orders/{order:order_number}', 'pages::user-order-detail')->name('orders.show');
     Route::livewire('/cart', 'pages::user-cart')->name('cart');
+    Route::livewire('/notifications', 'pages::user-notifications')->name('notifications');
     Route::livewire('/wishlist', 'pages::user-wishlist')->name('wishlist');
     Route::livewire('/chat', 'pages::user-chat')->name('chat');
 });

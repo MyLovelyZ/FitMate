@@ -119,6 +119,32 @@
                     </svg>
                 </button>
 
+                {{-- Notifikasi status pesanan, khusus akun yang belanja. Angkanya ikut diperbarui setiap pindah halaman. --}}
+                @if (auth()->user()?->canShop())
+                    @php
+                        $unreadNotifications = auth()->user()->unreadNotifications()->count();
+                    @endphp
+
+                    <a
+                        href="{{ route('user.notifications') }}"
+                        wire:navigate.hover
+                        class="relative inline-flex size-[38px] items-center justify-center rounded-full hover:bg-line"
+                        aria-label="Notifikasi{{ $unreadNotifications > 0 ? ', '.$unreadNotifications.' belum dibaca' : '' }}"
+                    >
+                        <svg class="size-[18px]" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                            <path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9" />
+                            <path d="M10.3 21a1.94 1.94 0 0 0 3.4 0" />
+                        </svg>
+
+                        @if ($unreadNotifications > 0)
+                            <span
+                                data-notification-count
+                                class="absolute -right-0.5 -top-0.5 min-w-[18px] rounded-full bg-sale px-1 text-center text-[10px] font-bold leading-[18px] text-cream"
+                            >{{ $unreadNotifications > 99 ? '99+' : $unreadNotifications }}</span>
+                        @endif
+                    </a>
+                @endif
+
                 {{-- Keranjang khusus pembeli; tamu diarahkan ke login oleh middleware auth. --}}
                 @if (! auth()->check() || auth()->user()->canShop())
                     @php

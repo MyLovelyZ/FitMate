@@ -39,6 +39,7 @@ dataset('role pages', [
     'superadmin settings' => ['superAdmin', 'superadmin.settings'],
     'user orders' => [null, 'user.orders'],
     'user cart' => [null, 'user.cart'],
+    'user notifications' => [null, 'user.notifications'],
     'user wishlist' => [null, 'user.wishlist'],
     'user chat' => [null, 'user.chat'],
 ]);
